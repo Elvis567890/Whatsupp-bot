@@ -3,51 +3,81 @@ const http = require('http');
 const socketIO = require('socket.io');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
+const { OpenAI } = require('openai');
+require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server);
 
-// Serve static files from the "public" folder
 app.use(express.static('public'));
 
-// Create WhatsApp client with local authentication (saves session so you don't need to scan QR every time)
+// Initialize OpenAI
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: { headless: true }
 });
 
-// When QR code is generated, send it to the browser
 client.on('qr', async (qr) => {
-    console.log('QR Code received, sending to browser');
     const qrImage = await qrcode.toDataURL(qr);
     io.emit('qr', qrImage);
 });
 
-// When client is ready, notify browser
 client.on('ready', () => {
     console.log('WhatsApp client is ready!');
     io.emit('ready');
 });
 
-// Simple auto-reply (will be enhanced later with AI)
+// Simple in-memory store for conversation history (keyed by chat ID)
+const conversationHistory = new Map();
+
 client.on('message', async (message) => {
-    const text = message.body.toLowerCase();
-    if (text.includes('hi') || text.includes('hello')) {
-        await message.reply('Hello! I am your bot. How can I help you?');
-    } else if (text.includes('how are you')) {
-        await message.reply('I am doing great, thank you for asking!');
+    const chatId = message.from;
+    const userText = message.body;
+
+    // Skip non-text messages or commands
+    if (!userText || userText.startsWith('!')) return;
+
+    // Get or initialize history for this chat
+    let history = conversationHistory.get(chatId) || [];
+    // Keep only last 10 messages to avoid huge prompts
+    history = history.slice(-9);
+
+    // Add user message to history
+    history.push({ role: 'user', content: userText });
+    conversationHistory.set(chatId, history);
+
+    try {
+        // Ask OpenAI for a reply
+        const completion = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo',
+            messages: [
+                { role: 'system', content: 'You are a friendly and helpful WhatsApp bot. You can chat naturally, tell jokes, and answer questions.' },
+                ...history,
+            ],
+            max_tokens: 150,
+            temperature: 0.7,
+        });
+
+        const reply = completion.choices[0].message.content.trim();
+        await message.reply(reply);
+
+        // Add assistant reply to history
+        history.push({ role: 'assistant', content: reply });
+        conversationHistory.set(chatId, history);
+    } catch (error) {
+        console.error('OpenAI error:', error.message);
+        await message.reply('Sorry, I had a small glitch. Could you repeat that?');
     }
-    // You can add more keyword responses here
 });
 
-// Initialize WhatsApp client
 client.initialize();
 
-// Socket.IO connection
 io.on('connection', (socket) => {
-    console.log('Browser connected');
-    // If client already ready, inform the new browser
     if (client.info && client.info.wid) {
         socket.emit('ready');
     }
