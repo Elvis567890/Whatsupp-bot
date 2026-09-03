@@ -1,0 +1,16 @@
+{
+  "name": "whatsapp-multibot",
+  "version": "1.0.0",
+  "description": "A powerful WhatsApp bot with dashboard, AI chat, media download, and more.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.5",
+    "whatsapp-web.js": "^1.23.1-alpha.5"
+  }
+}
