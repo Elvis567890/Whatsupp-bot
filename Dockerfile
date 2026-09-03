@@ -1,7 +1,6 @@
-# Use Node 20 slim
 FROM node:20-slim
 
-# Install Chromium and dependencies required by Puppeteer
+# Install Chromium and required libraries
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -23,22 +22,19 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Tell Puppeteer to use the installed Chromium
+# Tell Puppeteer to use system Chromium and skip download
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Set working directory
 WORKDIR /usr/src/app
 
 # Copy package files and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy the rest of the app
+# Copy the rest of the application
 COPY . .
 
-# Expose port (Render sets PORT env variable)
 EXPOSE 3000
 
-# Start the bot
 CMD ["node", "index.js"]
