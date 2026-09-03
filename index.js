@@ -26,7 +26,7 @@ const openai = new OpenAI({
 // ---------- RSS Parser ----------
 const rssParser = new Parser();
 
-// ---------- WhatsApp Client (uses puppeteer's own Chromium) ----------
+// ---------- WhatsApp Client (uses system Chromium from Docker) ----------
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
