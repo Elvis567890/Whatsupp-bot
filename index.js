@@ -7,9 +7,14 @@ const { OpenAI } = require('openai');
 const Parser = require('rss-parser');
 const fs = require('fs');
 const path = require('path');
-const ytDlp = require('yt-dlp-exec');
-const ffmpegPath = require('ffmpeg-static');
+const ytdl = require('ytdl-core');
+const ytSearch = require('yt-search');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegStatic = require('ffmpeg-static');
 require('dotenv').config();
+
+// Tell fluent-ffmpeg where the static binary is
+ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const app = express();
 const server = http.createServer(app);
@@ -25,7 +30,7 @@ const openai = new OpenAI({
 
 const rssParser = new Parser();
 
-// WhatsApp Client – let Puppeteer use its bundled Chromium
+// WhatsApp Client – uses bundled Chromium (no extra install)
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -125,9 +130,13 @@ async function handleNewsCommand(message, command) {
     }
 }
 
+/**
+ * Handles !music and !video commands using pure Node.js libraries.
+ * No system binaries required.
+ */
 async function handleDownloadCommand(message, command) {
     const parts = command.split(' ');
-    const type = parts[0];
+    const type = parts[0];          // 'music' or 'video'
     const query = parts.slice(1).join(' ').trim();
 
     if (!query) {
@@ -135,7 +144,23 @@ async function handleDownloadCommand(message, command) {
         return;
     }
 
-    await message.reply(`⏳ Downloading ${type}... Please wait.`);
+    await message.reply(`⏳ Searching for "${query}"...`);
+
+    let videoUrl;
+
+    // Check if input is already a valid YouTube URL
+    if (ytdl.validateURL(query)) {
+        videoUrl = query;
+    } else {
+        // Search and pick the first result
+        const searchResults = await ytSearch(query);
+        if (!searchResults.videos.length) {
+            await message.reply('❌ No videos found for that search term.');
+            return;
+        }
+        videoUrl = searchResults.videos[0].url;
+        await message.reply(`🎬 Found: *${searchResults.videos[0].title}*\nDownloading ${type}...`);
+    }
 
     const tmpDir = '/tmp';
     const ext = type === 'music' ? 'mp3' : 'mp4';
@@ -143,30 +168,40 @@ async function handleDownloadCommand(message, command) {
 
     try {
         if (type === 'music') {
-            await ytDlp(query, {
-                output: outputFile,
-                extractAudio: true,
-                audioFormat: 'mp3',
-                audioQuality: 192,
-                noPlaylist: true,
-                ffmpegLocation: ffmpegPath,
+            // Download audio only as MP3 using ffmpeg
+            const audioStream = ytdl(videoUrl, { filter: 'audioonly', quality: 'highestaudio' });
+            await new Promise((resolve, reject) => {
+                ffmpeg(audioStream)
+                    .audioBitrate(192)
+                    .audioCodec('libmp3lame')
+                    .format('mp3')
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .save(outputFile);
             });
         } else {
-            await ytDlp(query, {
-                output: outputFile,
-                format: 'best[height<=720]',
-                mergeOutputFormat: 'mp4',
-                noPlaylist: true,
-                ffmpegLocation: ffmpegPath,
+            // Download video (best quality with both audio & video, container mp4)
+            const videoStream = ytdl(videoUrl, {
+                filter: format => format.container === 'mp4' && format.hasAudio && format.hasVideo,
+                quality: 'highest'
+            });
+            const writeStream = fs.createWriteStream(outputFile);
+            await new Promise((resolve, reject) => {
+                videoStream.pipe(writeStream)
+                    .on('finish', resolve)
+                    .on('error', reject);
             });
         }
 
+        // Send file via WhatsApp
         const media = MessageMedia.fromFilePath(outputFile);
         await message.reply(media);
-        fs.unlinkSync(outputFile);
+        fs.unlinkSync(outputFile); // Clean up
     } catch (error) {
         console.error('Download error:', error.message);
         await message.reply('❌ Download failed. Make sure the link is correct or the video is not too long.');
+        // Clean up if file was partially written
+        if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
     }
 }
 
