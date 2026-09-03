@@ -25,13 +25,12 @@ const openai = new OpenAI({
 
 const rssParser = new Parser();
 
-// WhatsApp Client – use installed Chromium
+// WhatsApp Client – let Puppeteer use its bundled Chromium
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        executablePath: '/usr/bin/chromium',
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
 
