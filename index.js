@@ -12,9 +12,10 @@ const io = socketIO(server);
 
 app.use(express.static('public'));
 
-// Initialize OpenAI
+// Initialize Groq (OpenAI-compatible)
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.GROQ_API_KEY,   // <-- Changed to GROQ_API_KEY
+    baseURL: 'https://api.groq.com/openai/v1',  // <-- Groq endpoint
 });
 
 const client = new Client({
@@ -32,7 +33,7 @@ client.on('ready', () => {
     io.emit('ready');
 });
 
-// Simple in-memory store for conversation history (keyed by chat ID)
+// In-memory conversation history
 const conversationHistory = new Map();
 
 client.on('message', async (message) => {
@@ -42,19 +43,15 @@ client.on('message', async (message) => {
     // Skip non-text messages or commands
     if (!userText || userText.startsWith('!')) return;
 
-    // Get or initialize history for this chat
     let history = conversationHistory.get(chatId) || [];
-    // Keep only last 10 messages to avoid huge prompts
-    history = history.slice(-9);
+    history = history.slice(-9); // keep last 10 messages
 
-    // Add user message to history
     history.push({ role: 'user', content: userText });
     conversationHistory.set(chatId, history);
 
     try {
-        // Ask OpenAI for a reply
         const completion = await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
+            model: 'llama3-8b-8192',   // You can also use 'mixtral-8x7b-32768'
             messages: [
                 { role: 'system', content: 'You are a friendly and helpful WhatsApp bot. You can chat naturally, tell jokes, and answer questions.' },
                 ...history,
@@ -66,11 +63,10 @@ client.on('message', async (message) => {
         const reply = completion.choices[0].message.content.trim();
         await message.reply(reply);
 
-        // Add assistant reply to history
         history.push({ role: 'assistant', content: reply });
         conversationHistory.set(chatId, history);
     } catch (error) {
-        console.error('OpenAI error:', error.message);
+        console.error('Groq error:', error.message);
         await message.reply('Sorry, I had a small glitch. Could you repeat that?');
     }
 });
