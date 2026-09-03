@@ -11,9 +11,10 @@ const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
+const puppeteer = require('puppeteer'); // full puppeteer (includes Chromium)
 require('dotenv').config();
 
-// Tell fluent-ffmpeg where the static binary is
+// Set ffmpeg path to the static binary bundled with ffmpeg-static
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const app = express();
@@ -30,12 +31,13 @@ const openai = new OpenAI({
 
 const rssParser = new Parser();
 
-// WhatsApp Client – uses bundled Chromium (no extra install)
+// WhatsApp Client – uses Chromium bundled with puppeteer
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        executablePath: puppeteer.executablePath(), // points to downloaded Chromium
     }
 });
 
@@ -132,7 +134,7 @@ async function handleNewsCommand(message, command) {
 
 /**
  * Handles !music and !video commands using pure Node.js libraries.
- * No system binaries required.
+ * No system binaries (apt-get) are required.
  */
 async function handleDownloadCommand(message, command) {
     const parts = command.split(' ');
@@ -168,7 +170,7 @@ async function handleDownloadCommand(message, command) {
 
     try {
         if (type === 'music') {
-            // Download audio only as MP3 using ffmpeg
+            // Download audio only as MP3 using ffmpeg (static binary)
             const audioStream = ytdl(videoUrl, { filter: 'audioonly', quality: 'highestaudio' });
             await new Promise((resolve, reject) => {
                 ffmpeg(audioStream)
