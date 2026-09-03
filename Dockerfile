@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-# Install Chromium and required libraries
+# Install Chromium and dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -22,17 +22,15 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Tell Puppeteer to use system Chromium and skip download
+# Set Puppeteer to use system Chromium
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 WORKDIR /usr/src/app
 
-# Copy package files and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy the rest of the application
 COPY . .
 
 EXPOSE 3000
