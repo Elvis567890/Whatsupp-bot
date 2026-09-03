@@ -17,16 +17,15 @@ const io = socketIO(server);
 
 app.use(express.static('public'));
 
-// ---------- Groq AI Setup (FREE) ----------
+// Groq AI
 const openai = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
     baseURL: 'https://api.groq.com/openai/v1',
 });
 
-// ---------- RSS Parser ----------
 const rssParser = new Parser();
 
-// ---------- WhatsApp Client (uses system Chromium) ----------
+// WhatsApp Client – use installed Chromium
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -37,7 +36,6 @@ const client = new Client({
 });
 
 client.on('qr', async (qr) => {
-    console.log('QR Code received');
     const qrImage = await qrcode.toDataURL(qr);
     io.emit('qr', qrImage);
 });
@@ -47,10 +45,8 @@ client.on('ready', () => {
     io.emit('ready');
 });
 
-// ---------- Conversation History ----------
 const conversationHistory = new Map();
 
-// ---------- News Feeds ----------
 const NEWS_FEEDS = {
     world: 'http://feeds.bbci.co.uk/news/world/rss.xml',
     tech: 'http://feeds.bbci.co.uk/news/technology/rss.xml',
@@ -58,17 +54,14 @@ const NEWS_FEEDS = {
     sports: 'http://feeds.bbci.co.uk/sport/rss.xml',
 };
 
-// ---------- Main Message Handler ----------
 client.on('message', async (message) => {
     const chatId = message.from;
     const userText = message.body.trim();
 
     if (!userText) return;
 
-    // Commands (prefix: !)
     if (userText.startsWith('!')) {
         const command = userText.slice(1).toLowerCase();
-
         if (command.startsWith('news')) {
             await handleNewsCommand(message, command);
         } else if (command.startsWith('music') || command.startsWith('video')) {
@@ -79,9 +72,8 @@ client.on('message', async (message) => {
         return;
     }
 
-    // AI Conversation (Groq)
     let history = conversationHistory.get(chatId) || [];
-    history = history.slice(-9); // keep last 10 messages
+    history = history.slice(-9);
     history.push({ role: 'user', content: userText });
     conversationHistory.set(chatId, history);
 
@@ -107,7 +99,6 @@ client.on('message', async (message) => {
     }
 });
 
-// ---------- News Command ----------
 async function handleNewsCommand(message, command) {
     const parts = command.split(' ');
     let category = 'world';
@@ -135,7 +126,6 @@ async function handleNewsCommand(message, command) {
     }
 }
 
-// ---------- Download Command (Music/Video) ----------
 async function handleDownloadCommand(message, command) {
     const parts = command.split(' ');
     const type = parts[0];
@@ -181,7 +171,6 @@ async function handleDownloadCommand(message, command) {
     }
 }
 
-// ---------- Initialize ----------
 client.initialize();
 
 io.on('connection', (socket) => {
