@@ -26,11 +26,12 @@ const openai = new OpenAI({
 // ---------- RSS Parser ----------
 const rssParser = new Parser();
 
-// ---------- WhatsApp Client (uses system Chromium from Docker) ----------
+// ---------- WhatsApp Client (uses system Chromium) ----------
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
+        executablePath: '/usr/bin/chromium',
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
