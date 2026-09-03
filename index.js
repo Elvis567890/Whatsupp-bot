@@ -26,12 +26,11 @@ const openai = new OpenAI({
 // ---------- RSS Parser ----------
 const rssParser = new Parser();
 
-// ---------- WhatsApp Client (with Puppeteer fix) ----------
+// ---------- WhatsApp Client (uses puppeteer's own Chromium) ----------
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
