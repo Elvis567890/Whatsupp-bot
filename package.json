@@ -4,8 +4,7 @@
   "description": "WhatsApp bot with AI, news, and media download",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "start": "node index.js"
   },
   "dependencies": {
     "dotenv": "^16.3.1",
@@ -13,7 +12,7 @@
     "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.2",
     "openai": "^4.20.1",
-    "puppeteer": "^21.0.0",
+    "puppeteer": "21.0.0",
     "qrcode": "^1.5.3",
     "rss-parser": "^3.13.0",
     "socket.io": "^4.7.2",
