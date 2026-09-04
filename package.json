@@ -4,7 +4,8 @@
   "description": "WhatsApp bot with AI, news, and media download",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "postinstall": "npx puppeteer browsers install chrome"
   },
   "dependencies": {
     "dotenv": "^16.3.1",
