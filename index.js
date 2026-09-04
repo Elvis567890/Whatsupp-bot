@@ -11,11 +11,14 @@ const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
-const puppeteer = require('puppeteer'); // full puppeteer (includes Chromium)
+const puppeteer = require('puppeteer');
 require('dotenv').config();
 
-// Set ffmpeg path to the static binary bundled with ffmpeg-static
 ffmpeg.setFfmpegPath(ffmpegStatic);
+
+// Set environment variable so puppeteer-core finds Chromium
+process.env.PUPPETEER_EXECUTABLE_PATH = puppeteer.executablePath();
+console.log(`🔍 Chromium path: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
 
 const app = express();
 const server = http.createServer(app);
@@ -23,7 +26,6 @@ const io = socketIO(server);
 
 app.use(express.static('public'));
 
-// Groq AI
 const openai = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
     baseURL: 'https://api.groq.com/openai/v1',
@@ -31,13 +33,11 @@ const openai = new OpenAI({
 
 const rssParser = new Parser();
 
-// WhatsApp Client – uses Chromium bundled with puppeteer
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        executablePath: puppeteer.executablePath(), // points to downloaded Chromium
     }
 });
 
@@ -132,13 +132,9 @@ async function handleNewsCommand(message, command) {
     }
 }
 
-/**
- * Handles !music and !video commands using pure Node.js libraries.
- * No system binaries (apt-get) are required.
- */
 async function handleDownloadCommand(message, command) {
     const parts = command.split(' ');
-    const type = parts[0];          // 'music' or 'video'
+    const type = parts[0];
     const query = parts.slice(1).join(' ').trim();
 
     if (!query) {
@@ -149,12 +145,9 @@ async function handleDownloadCommand(message, command) {
     await message.reply(`⏳ Searching for "${query}"...`);
 
     let videoUrl;
-
-    // Check if input is already a valid YouTube URL
     if (ytdl.validateURL(query)) {
         videoUrl = query;
     } else {
-        // Search and pick the first result
         const searchResults = await ytSearch(query);
         if (!searchResults.videos.length) {
             await message.reply('❌ No videos found for that search term.');
@@ -170,7 +163,6 @@ async function handleDownloadCommand(message, command) {
 
     try {
         if (type === 'music') {
-            // Download audio only as MP3 using ffmpeg (static binary)
             const audioStream = ytdl(videoUrl, { filter: 'audioonly', quality: 'highestaudio' });
             await new Promise((resolve, reject) => {
                 ffmpeg(audioStream)
@@ -182,7 +174,6 @@ async function handleDownloadCommand(message, command) {
                     .save(outputFile);
             });
         } else {
-            // Download video (best quality with both audio & video, container mp4)
             const videoStream = ytdl(videoUrl, {
                 filter: format => format.container === 'mp4' && format.hasAudio && format.hasVideo,
                 quality: 'highest'
@@ -195,14 +186,12 @@ async function handleDownloadCommand(message, command) {
             });
         }
 
-        // Send file via WhatsApp
         const media = MessageMedia.fromFilePath(outputFile);
         await message.reply(media);
-        fs.unlinkSync(outputFile); // Clean up
+        fs.unlinkSync(outputFile);
     } catch (error) {
         console.error('Download error:', error.message);
         await message.reply('❌ Download failed. Make sure the link is correct or the video is not too long.');
-        // Clean up if file was partially written
         if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
     }
 }
