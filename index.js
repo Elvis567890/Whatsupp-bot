@@ -11,14 +11,14 @@ const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
+const puppeteer = require('puppeteer'); // full package – provides the browser
 require('dotenv').config();
 
-// Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
-// Use system Chromium (installed via pre-deploy command)
-const CHROME_PATH = '/usr/bin/chromium';
-console.log(`✅ Using system Chromium at: ${CHROME_PATH}`);
+// Get the path to Chromium that puppeteer installed (revision 121.0.6167.85)
+const CHROME_PATH = puppeteer.executablePath();
+console.log(`✅ Using Chromium at: ${CHROME_PATH}`);
 
 const app = express();
 const server = http.createServer(app);
@@ -33,7 +33,6 @@ const openai = new OpenAI({
 
 const rssParser = new Parser();
 
-// WhatsApp client with system Chrome
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
