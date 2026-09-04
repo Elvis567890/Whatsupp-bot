@@ -11,13 +11,13 @@ const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
-const puppeteer = require('puppeteer');
 require('dotenv').config();
 
+// Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
-// Use the exact Chromium path provided by puppeteer (from cache)
-const CHROME_PATH = puppeteer.executablePath();
+// System Chromium path (installed via pre-deploy)
+const CHROME_PATH = '/usr/bin/chromium-browser';
 console.log(`✅ Using Chromium at: ${CHROME_PATH}`);
 
 const app = express();
