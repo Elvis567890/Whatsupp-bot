@@ -1,7 +1,3 @@
-// Force Puppeteer to download the browser into the project folder
-// This ensures the browser is available at runtime.
-process.env.PUPPETEER_CACHE_DIR = './puppeteer-cache';
-
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
@@ -21,9 +17,8 @@ require('dotenv').config();
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
-// Get the path to the downloaded Chromium (now inside the project)
-const CHROME_PATH = puppeteer.executablePath();
-console.log(`✅ Using Chromium at: ${CHROME_PATH}`);
+// NOTE: Removed `process.env.PUPPETEER_CACHE_DIR` and the hardcoded `CHROME_PATH`.
+// Puppeteer will now automatically find the browser via puppeteer.config.cjs
 
 const app = express();
 const server = http.createServer(app);
@@ -45,7 +40,7 @@ const client = new Client({
     puppeteer: {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        executablePath: CHROME_PATH,
+        // NOTE: Removed executablePath. It automatically resolves to the .cache folder.
     }
 });
 
