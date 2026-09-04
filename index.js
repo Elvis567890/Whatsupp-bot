@@ -11,7 +11,6 @@ const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
-const puppeteer = require('puppeteer');
 require('dotenv').config();
 
 // Set ffmpeg path
@@ -49,10 +48,14 @@ const client = new Client({
     }
 });
 
+// Store latest QR code to send to new browser connections
+let latestQr = null;
+
 // QR code event
 client.on('qr', async (qr) => {
     const qrImage = await qrcode.toDataURL(qr);
-    io.emit('qr', qrImage);
+    latestQr = qrImage;           // save for later
+    io.emit('qr', qrImage);       // emit to all connected browsers
 });
 
 // Ready event
@@ -81,8 +84,13 @@ async function sendDashboardData() {
 // Socket connection
 io.on('connection', (socket) => {
     console.log('Browser connected');
+    // If client is already ready, send ready and dashboard data
     if (client.info && client.info.wid) {
+        socket.emit('ready');
         sendDashboardData();
+    } else if (latestQr) {
+        // If not connected but QR exists, send it to the new browser
+        socket.emit('qr', latestQr);
     }
 
     // Handle sending message to selected groups from dashboard
@@ -137,7 +145,7 @@ client.on('message', async (message) => {
 
     // AI chat with current mode
     let history = conversationHistory.get(chatId) || [];
-    history = history.slice(-9);
+    history = history.slice(-9); // keep last 9 messages
     history.push({ role: 'user', content: userText });
     conversationHistory.set(chatId, history);
 
