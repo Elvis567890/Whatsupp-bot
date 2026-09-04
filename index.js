@@ -11,14 +11,14 @@ const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer'); // full package – provides the browser
 require('dotenv').config();
 
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
-// Set environment variable so puppeteer-core finds Chromium
-process.env.PUPPETEER_EXECUTABLE_PATH = puppeteer.executablePath();
-console.log(`🔍 Chromium path: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+// Get the path to Chromium that puppeteer installed
+const CHROME_PATH = puppeteer.executablePath();
+console.log(`✅ Using Chromium at: ${CHROME_PATH}`);
 
 const app = express();
 const server = http.createServer(app);
@@ -33,11 +33,13 @@ const openai = new OpenAI({
 
 const rssParser = new Parser();
 
+// WhatsApp client – point directly to the downloaded Chromium
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        executablePath: CHROME_PATH, // explicit path
     }
 });
 
