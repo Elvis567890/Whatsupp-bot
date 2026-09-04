@@ -11,14 +11,12 @@ const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
-const puppeteer = require('puppeteer'); // provides the exact browser revision
 require('dotenv').config();
 
-// Set ffmpeg path (static binary bundled with the package)
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
-// Get the path to the Chromium that puppeteer installed (or cached)
-const CHROME_PATH = puppeteer.executablePath();
+// System Chromium path (installed via pre-deploy command)
+const CHROME_PATH = '/usr/bin/chromium';
 console.log(`✅ Using Chromium at: ${CHROME_PATH}`);
 
 const app = express();
@@ -27,7 +25,6 @@ const io = socketIO(server);
 
 app.use(express.static('public'));
 
-// Groq AI
 const openai = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
     baseURL: 'https://api.groq.com/openai/v1',
@@ -35,7 +32,6 @@ const openai = new OpenAI({
 
 const rssParser = new Parser();
 
-// WhatsApp client – uses the local Chromium
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -45,22 +41,18 @@ const client = new Client({
     }
 });
 
-// QR code event
 client.on('qr', async (qr) => {
     const qrImage = await qrcode.toDataURL(qr);
     io.emit('qr', qrImage);
 });
 
-// Ready event
 client.on('ready', () => {
     console.log('WhatsApp client is ready!');
     io.emit('ready');
 });
 
-// Conversation history (for AI)
 const conversationHistory = new Map();
 
-// News feeds
 const NEWS_FEEDS = {
     world: 'http://feeds.bbci.co.uk/news/world/rss.xml',
     tech: 'http://feeds.bbci.co.uk/news/technology/rss.xml',
@@ -68,14 +60,12 @@ const NEWS_FEEDS = {
     sports: 'http://feeds.bbci.co.uk/sport/rss.xml',
 };
 
-// Main message handler
 client.on('message', async (message) => {
     const chatId = message.from;
     const userText = message.body.trim();
 
     if (!userText) return;
 
-    // Check for commands
     if (userText.startsWith('!')) {
         const command = userText.slice(1).toLowerCase();
         if (command.startsWith('news')) {
@@ -88,9 +78,8 @@ client.on('message', async (message) => {
         return;
     }
 
-    // AI chat
     let history = conversationHistory.get(chatId) || [];
-    history = history.slice(-9); // keep last 9 messages
+    history = history.slice(-9);
     history.push({ role: 'user', content: userText });
     conversationHistory.set(chatId, history);
 
@@ -116,7 +105,6 @@ client.on('message', async (message) => {
     }
 });
 
-// News command handler
 async function handleNewsCommand(message, command) {
     const parts = command.split(' ');
     let category = 'world';
@@ -144,10 +132,9 @@ async function handleNewsCommand(message, command) {
     }
 }
 
-// Music / video download handler
 async function handleDownloadCommand(message, command) {
     const parts = command.split(' ');
-    const type = parts[0]; // 'music' or 'video'
+    const type = parts[0];
     const query = parts.slice(1).join(' ').trim();
 
     if (!query) {
@@ -209,10 +196,8 @@ async function handleDownloadCommand(message, command) {
     }
 }
 
-// Initialize WhatsApp client
 client.initialize();
 
-// Socket.io connection
 io.on('connection', (socket) => {
     console.log('Browser connected');
     if (client.info && client.info.wid) {
@@ -220,7 +205,6 @@ io.on('connection', (socket) => {
     }
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
