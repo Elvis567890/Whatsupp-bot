@@ -17,9 +17,6 @@ require('dotenv').config();
 // Set ffmpeg path
 ffmpeg.setFfmpegPath(ffmpegStatic);
 
-// NOTE: Removed `process.env.PUPPETEER_CACHE_DIR` and the hardcoded `CHROME_PATH`.
-// Puppeteer will now automatically find the browser via puppeteer.config.cjs
-
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server);
@@ -34,13 +31,21 @@ const openai = new OpenAI({
 
 const rssParser = new Parser();
 
-// WhatsApp client – uses the local Chromium
+// ---------- AI Personality Modes ----------
+let currentMode = 'normal';
+const MODE_PROMPTS = {
+    normal: 'You are a friendly and helpful WhatsApp bot. You can chat naturally, tell jokes, and answer questions.',
+    angry: 'You are an angry and irritated WhatsApp bot. Respond with frustration and use CAPS or short, sharp sentences. Be rude but not overly offensive.',
+    flirty: 'You are a charming and flirty WhatsApp bot. Use pickup lines, compliments, and playful teasing. Keep it light and fun.',
+    professional: 'You are a professional business assistant bot. Be formal, polite, and concise. Use proper grammar and avoid slang.'
+};
+
+// WhatsApp client
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        // NOTE: Removed executablePath. It automatically resolves to the .cache folder.
     }
 });
 
@@ -54,6 +59,46 @@ client.on('qr', async (qr) => {
 client.on('ready', () => {
     console.log('WhatsApp client is ready!');
     io.emit('ready');
+    // Send dashboard data (connected number + groups)
+    sendDashboardData();
+});
+
+// Function to fetch and send dashboard data
+async function sendDashboardData() {
+    try {
+        const chats = await client.getChats();
+        const groups = chats.filter(chat => chat.isGroup).map(chat => ({
+            id: chat.id._serialized,
+            name: chat.name
+        }));
+        const connectedNumber = client.info.wid.user;
+        io.emit('dashboard_data', { connectedNumber, groups });
+    } catch (error) {
+        console.error('Error getting chats:', error.message);
+    }
+}
+
+// Socket connection
+io.on('connection', (socket) => {
+    console.log('Browser connected');
+    if (client.info && client.info.wid) {
+        sendDashboardData();
+    }
+
+    // Handle sending message to selected groups from dashboard
+    socket.on('send_to_groups', async (data) => {
+        const { groupIds, message } = data;
+        if (!groupIds || !message) return;
+        try {
+            for (const id of groupIds) {
+                await client.sendMessage(id, message);
+            }
+            socket.emit('send_result', { success: true });
+        } catch (error) {
+            console.error('Send to groups error:', error.message);
+            socket.emit('send_result', { success: false, error: error.message });
+        }
+    });
 });
 
 // Conversation history (for AI)
@@ -77,27 +122,31 @@ client.on('message', async (message) => {
     // Check for commands
     if (userText.startsWith('!')) {
         const command = userText.slice(1).toLowerCase();
+
         if (command.startsWith('news')) {
             await handleNewsCommand(message, command);
         } else if (command.startsWith('music') || command.startsWith('video')) {
             await handleDownloadCommand(message, command);
+        } else if (command.startsWith('setmode')) {
+            await handleSetModeCommand(message, command);
         } else {
-            await message.reply('❓ Unknown command. Try:\n`!news`\n`!news tech`\n`!music <YouTube link or search>`\n`!video <YouTube link or search>`');
+            await message.reply('❓ Unknown command. Try:\n`!news`\n`!news tech`\n`!music <YouTube link or search>`\n`!video <YouTube link or search>`\n`!setmode angry|flirty|professional|normal`');
         }
         return;
     }
 
-    // AI chat
+    // AI chat with current mode
     let history = conversationHistory.get(chatId) || [];
-    history = history.slice(-9); // keep last 9 messages
+    history = history.slice(-9);
     history.push({ role: 'user', content: userText });
     conversationHistory.set(chatId, history);
 
     try {
+        const systemPrompt = MODE_PROMPTS[currentMode] || MODE_PROMPTS.normal;
         const completion = await openai.chat.completions.create({
             model: 'llama3-8b-8192',
             messages: [
-                { role: 'system', content: 'You are a friendly and helpful WhatsApp bot. You can chat naturally, tell jokes, and answer questions.' },
+                { role: 'system', content: systemPrompt },
                 ...history,
             ],
             max_tokens: 150,
@@ -114,6 +163,18 @@ client.on('message', async (message) => {
         await message.reply('😅 Sorry, I had a small glitch. Could you repeat that?');
     }
 });
+
+// Set mode command handler
+async function handleSetModeCommand(message, command) {
+    const parts = command.split(' ');
+    const mode = parts[1]?.toLowerCase();
+    if (!mode || !(mode in MODE_PROMPTS)) {
+        await message.reply('Valid modes: angry, flirty, professional, normal\nExample: !setmode flirty');
+        return;
+    }
+    currentMode = mode;
+    await message.reply(`✅ Mode changed to *${mode}*. I will now reply with that personality.`);
+}
 
 // News command handler
 async function handleNewsCommand(message, command) {
@@ -146,7 +207,7 @@ async function handleNewsCommand(message, command) {
 // Music / video download handler
 async function handleDownloadCommand(message, command) {
     const parts = command.split(' ');
-    const type = parts[0]; // 'music' or 'video'
+    const type = parts[0];
     const query = parts.slice(1).join(' ').trim();
 
     if (!query) {
@@ -210,14 +271,6 @@ async function handleDownloadCommand(message, command) {
 
 // Initialize WhatsApp client
 client.initialize();
-
-// Socket.io connection
-io.on('connection', (socket) => {
-    console.log('Browser connected');
-    if (client.info && client.info.wid) {
-        socket.emit('ready');
-    }
-});
 
 // Start server
 const PORT = process.env.PORT || 3000;
