@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
-const { Client, MessageMedia, RemoteAuth } = require('whatsapp-web.js'); // FIXED: Removed AuthStrategy, added RemoteAuth
+const { Client, MessageMedia, RemoteAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const { OpenAI } = require('openai');
 const Parser = require('rss-parser');
@@ -96,7 +96,8 @@ class SupabaseStore {
 const client = new Client({
   authStrategy: new RemoteAuth({
     clientId: 'whatsapp-bot',
-    dataStore: new SupabaseStore()
+    dataStore: new SupabaseStore(),
+    backupSyncIntervalMs: 60000, // CRITICAL FIX: Must be 60000 or higher
   }),
   puppeteer: {
     headless: true,
@@ -162,6 +163,11 @@ client.on('ready', async () => {
     `!myschedules – list your scheduled messages\n` +
     `!cancelschedule <id> – delete a schedule`;
   await client.sendMessage(adminNumber, helpText);
+});
+
+// Log when the session is successfully backed up to Supabase
+client.on('remote_session_saved', () => {
+  console.log('✅ WhatsApp session successfully saved to Supabase!');
 });
 
 // Dashboard data
