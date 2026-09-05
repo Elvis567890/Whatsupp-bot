@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
-const { Client, MessageMedia } = require('whatsapp-web.js');
+const { Client, MessageMedia, AuthStrategy } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const { OpenAI } = require('openai');
 const Parser = require('rss-parser');
@@ -72,19 +72,41 @@ const MODE_PROMPTS = {
   professional: 'You are a professional business assistant bot. Be formal, polite, and concise. Use proper grammar and avoid slang.'
 };
 
-// Custom auth strategy using Supabase
-class SupabaseAuth {
+// ---------- Custom Auth Strategy (Supabase) ----------
+class SupabaseAuth extends AuthStrategy {
+  constructor() {
+    super();
+  }
+
+  async setup(client) {
+    // No extra setup needed; we can store client reference if needed
+  }
+
+  async beforeBrowserInitialized() {
+    // Called before browser is initialized
+  }
+
+  async afterBrowserInitialized() {
+    // Called after browser is initialized
+  }
+
+  async onAuthenticationNeeded() {
+    // Called when QR code is needed; we emit it from the client's qr event
+  }
+
   async getSession() {
     const res = await pool.query('SELECT data FROM bot_sessions WHERE id=$1', ['whatsapp_session']);
     if (res.rows.length === 0) return null;
     return res.rows[0].data;
   }
+
   async saveSession(session) {
     await pool.query(
       'INSERT INTO bot_sessions (id, data) VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data=$2, updated_at=NOW()',
       ['whatsapp_session', session]
     );
   }
+
   async removeSession() {
     await pool.query('DELETE FROM bot_sessions WHERE id=$1', ['whatsapp_session']);
   }
@@ -420,33 +442,31 @@ async function handleBroadcast(message, command) {
 
 // Handle schedule command
 async function handleSchedule(message, command) {
-  // command example: "schedule once 2025-12-31 10:00 Happy New Year!"
   const parts = command.split(' ');
   if (parts.length < 4) {
     return message.reply('Usage:\n`!schedule once <YYYY-MM-DD HH:MM> <message>`\n`!schedule daily <HH:MM> <message>`\n`!schedule weekly <Day HH:MM> <message>`');
   }
 
-  const type = parts[1].toLowerCase(); // once, daily, weekly
+  const type = parts[1].toLowerCase();
   let cronExpression;
   let scheduleMessage;
 
   try {
     if (type === 'once') {
-      // parts[2] is date, parts[3] is time
       const dateTime = `${parts[2]} ${parts[3]}`;
       const dt = new Date(dateTime);
       if (isNaN(dt.getTime())) throw new Error('Invalid date/time');
-      cronExpression = `${dt.getMinutes()} ${dt.getHours()} ${dt.getDate()} ${dt.getMonth()+1} *`; // month 1-12
+      cronExpression = `${dt.getMinutes()} ${dt.getHours()} ${dt.getDate()} ${dt.getMonth()+1} *`;
       scheduleMessage = parts.slice(4).join(' ');
     } else if (type === 'daily') {
-      const time = parts[2]; // HH:MM
+      const time = parts[2];
       const [hour, minute] = time.split(':').map(Number);
       if (isNaN(hour) || isNaN(minute)) throw new Error('Invalid time');
       cronExpression = `${minute} ${hour} * * *`;
       scheduleMessage = parts.slice(3).join(' ');
     } else if (type === 'weekly') {
-      const day = parts[2]; // e.g., Monday
-      const time = parts[3]; // HH:MM
+      const day = parts[2];
+      const time = parts[3];
       const [hour, minute] = time.split(':').map(Number);
       if (isNaN(hour) || isNaN(minute)) throw new Error('Invalid time');
       const daysMap = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
@@ -460,14 +480,12 @@ async function handleSchedule(message, command) {
 
     if (!scheduleMessage) return message.reply('Message is required.');
 
-    // Save to DB
     const res = await pool.query(
       'INSERT INTO bot_schedules (chat_id, cron_expression, message) VALUES ($1,$2,$3) RETURNING id',
       [message.from, cronExpression, scheduleMessage]
     );
     const id = res.rows[0].id;
 
-    // Schedule job
     schedule.scheduleJob(cronExpression, async () => {
       try {
         const chat = await client.getChatById(message.from);
