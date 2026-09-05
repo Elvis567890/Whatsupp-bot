@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
-const { Client, MessageMedia, AuthStrategy } = require('whatsapp-web.js');
+const { Client, MessageMedia } = require('whatsapp-web.js'); // Removed AuthStrategy
 const qrcode = require('qrcode');
 const { OpenAI } = require('openai');
 const Parser = require('rss-parser');
@@ -73,10 +73,8 @@ const MODE_PROMPTS = {
 };
 
 // ---------- Custom Auth Strategy (Supabase) ----------
-class SupabaseAuth extends AuthStrategy {
-  constructor() {
-    super();
-  }
+class SupabaseAuth {  // Removed extends AuthStrategy
+  // No constructor needed; the client only requires the methods
 
   async setup(client) {
     // No extra setup needed; we can store client reference if needed
