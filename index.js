@@ -96,8 +96,8 @@ class SupabaseStore {
 const client = new Client({
   authStrategy: new RemoteAuth({
     clientId: 'whatsapp-bot',
-    dataStore: new SupabaseStore(),
-    backupSyncIntervalMs: 60000, // CRITICAL FIX: Must be 60000 or higher
+    store: new SupabaseStore(), // FIXED: Changed 'dataStore' to 'store' to match library requirement
+    backupSyncIntervalMs: 60000,
   }),
   puppeteer: {
     headless: true,
