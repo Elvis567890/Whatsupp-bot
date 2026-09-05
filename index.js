@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
-const { Client, MessageMedia } = require('whatsapp-web.js'); // Removed AuthStrategy
+const { Client, MessageMedia, AuthStrategy } = require('whatsapp-web.js'); // Added AuthStrategy
 const qrcode = require('qrcode');
 const { OpenAI } = require('openai');
 const Parser = require('rss-parser');
@@ -24,9 +24,10 @@ const io = socketIO(server);
 app.use(express.static('public'));
 
 // ---------- Supabase PostgreSQL Setup ----------
+// Uses DATABASE_URL environment variable (must be set in Render)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false }, // Required for Supabase
 });
 
 async function initDb() {
@@ -73,11 +74,9 @@ const MODE_PROMPTS = {
 };
 
 // ---------- Custom Auth Strategy (Supabase) ----------
-class SupabaseAuth {  // Removed extends AuthStrategy
-  // No constructor needed; the client only requires the methods
-
+class SupabaseAuth extends AuthStrategy { // FIXED: Extends AuthStrategy
   async setup(client) {
-    // No extra setup needed; we can store client reference if needed
+    // No extra setup needed
   }
 
   async beforeBrowserInitialized() {
@@ -89,7 +88,7 @@ class SupabaseAuth {  // Removed extends AuthStrategy
   }
 
   async onAuthenticationNeeded() {
-    // Called when QR code is needed; we emit it from the client's qr event
+    // Called when QR code is needed
   }
 
   async getSession() {
@@ -116,6 +115,7 @@ const client = new Client({
   puppeteer: {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    // executablePath: '/usr/bin/google-chrome-stable' // Uncomment if using Dockerfile approach
   }
 });
 
