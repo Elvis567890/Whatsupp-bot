@@ -11,6 +11,7 @@ const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
+const { MongoClient } = require('mongodb');
 require('dotenv').config();
 
 // Set ffmpeg path
@@ -21,6 +22,50 @@ const server = http.createServer(app);
 const io = socketIO(server);
 
 app.use(express.static('public'));
+
+// ---------- MongoDB Setup ----------
+const mongoUri = process.env.MONGODB_URI;
+if (!mongoUri) {
+    console.error('MONGODB_URI is not set. Please add it to Render environment variables.');
+    process.exit(1);
+}
+const mongoClient = new MongoClient(mongoUri);
+let sessionsCollection;
+let settingsCollection;
+
+async function connectMongo() {
+    await mongoClient.connect();
+    const db = mongoClient.db('whatsapp_bot');
+    sessionsCollection = db.collection('sessions');
+    settingsCollection = db.collection('settings');
+    console.log('Connected to MongoDB');
+    // Load current AI mode from DB (if exists)
+    const setting = await settingsCollection.findOne({ _id: 'ai_mode' });
+    if (setting && setting.value in MODE_PROMPTS) {
+        currentMode = setting.value;
+    }
+}
+
+// Custom auth strategy: store session in MongoDB
+class MongoAuth {
+    async getSession() {
+        if (!sessionsCollection) return null;
+        const session = await sessionsCollection.findOne({ _id: 'whatsapp_session' });
+        return session ? session.data : null;
+    }
+    async saveSession(session) {
+        if (!sessionsCollection) return;
+        await sessionsCollection.updateOne(
+            { _id: 'whatsapp_session' },
+            { $set: { data: session } },
+            { upsert: true }
+        );
+    }
+    async removeSession() {
+        if (!sessionsCollection) return;
+        await sessionsCollection.deleteOne({ _id: 'whatsapp_session' });
+    }
+}
 
 // Groq AI
 const openai = new OpenAI({
@@ -39,43 +84,61 @@ const MODE_PROMPTS = {
     professional: 'You are a professional business assistant bot. Be formal, polite, and concise. Use proper grammar and avoid slang.'
 };
 
-// WhatsApp client
+// WhatsApp client with MongoDB session
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new MongoAuth(),
     puppeteer: {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
     }
 });
 
-// Store latest QR code to send to new browser connections
 let latestQr = null;
 
-// QR code event
 client.on('qr', async (qr) => {
     const qrImage = await qrcode.toDataURL(qr);
-    latestQr = qrImage;           // save for later
-    io.emit('qr', qrImage);       // emit to all connected browsers
+    latestQr = qrImage;
+    io.emit('qr', qrImage);
 });
 
-// Ready event
-client.on('ready', () => {
+client.on('ready', async () => {
     console.log('WhatsApp client is ready!');
     io.emit('ready');
-    // Send dashboard data (connected number + groups)
     sendDashboardData();
+
+    // Send welcome message to the bot's own number (admin)
+    const adminNumber = client.info.wid._serialized; // e.g., '123456789@c.us'
+    try {
+        const helpText = `🤖 *Your WhatsApp Bot is now online!*\n\n` +
+            `Here are the commands you can use:\n` +
+            `!help – show this menu\n` +
+            `!news – world news\n` +
+            `!news tech – tech news (also business, sports)\n` +
+            `!music <song name / YouTube link> – download audio\n` +
+            `!video <video name / YouTube link> – download video\n` +
+            `!setmode flirty – flirty personality\n` +
+            `!setmode angry – angry personality\n` +
+            `!setmode professional – formal tone\n` +
+            `!setmode normal – default friendly\n\n` +
+            `You can also use the dashboard to send messages to any chat.`;
+        await client.sendMessage(adminNumber, helpText);
+        console.log('Welcome message sent to admin');
+    } catch (error) {
+        console.error('Error sending welcome message:', error.message);
+    }
 });
 
-// Function to fetch and send dashboard data
+// ---------- Dashboard Data (all chats) ----------
 async function sendDashboardData() {
     try {
         const chats = await client.getChats();
-        const groups = chats.filter(chat => chat.isGroup).map(chat => ({
+        const chatList = chats.map(chat => ({
             id: chat.id._serialized,
-            name: chat.name
+            name: chat.name || chat.id.user,
+            isGroup: chat.isGroup
         }));
         const connectedNumber = client.info.wid.user;
-        io.emit('dashboard_data', { connectedNumber, groups });
+        io.emit('dashboard_data', { connectedNumber, chats: chatList });
     } catch (error) {
         console.error('Error getting chats:', error.message);
     }
@@ -84,26 +147,23 @@ async function sendDashboardData() {
 // Socket connection
 io.on('connection', (socket) => {
     console.log('Browser connected');
-    // If client is already ready, send ready and dashboard data
     if (client.info && client.info.wid) {
         socket.emit('ready');
         sendDashboardData();
     } else if (latestQr) {
-        // If not connected but QR exists, send it to the new browser
         socket.emit('qr', latestQr);
     }
 
-    // Handle sending message to selected groups from dashboard
-    socket.on('send_to_groups', async (data) => {
-        const { groupIds, message } = data;
-        if (!groupIds || !message) return;
+    socket.on('send_to_chats', async (data) => {
+        const { chatIds, message } = data;
+        if (!chatIds || !message) return;
         try {
-            for (const id of groupIds) {
+            for (const id of chatIds) {
                 await client.sendMessage(id, message);
             }
             socket.emit('send_result', { success: true });
         } catch (error) {
-            console.error('Send to groups error:', error.message);
+            console.error('Send error:', error.message);
             socket.emit('send_result', { success: false, error: error.message });
         }
     });
@@ -127,25 +187,25 @@ client.on('message', async (message) => {
 
     if (!userText) return;
 
-    // Check for commands
     if (userText.startsWith('!')) {
         const command = userText.slice(1).toLowerCase();
-
-        if (command.startsWith('news')) {
+        if (command.startsWith('help')) {
+            await handleHelpCommand(message);
+        } else if (command.startsWith('news')) {
             await handleNewsCommand(message, command);
         } else if (command.startsWith('music') || command.startsWith('video')) {
             await handleDownloadCommand(message, command);
         } else if (command.startsWith('setmode')) {
             await handleSetModeCommand(message, command);
         } else {
-            await message.reply('❓ Unknown command. Try:\n`!news`\n`!news tech`\n`!music <YouTube link or search>`\n`!video <YouTube link or search>`\n`!setmode angry|flirty|professional|normal`');
+            await message.reply('❓ Unknown command. Type `!help` for list.');
         }
         return;
     }
 
-    // AI chat with current mode
+    // AI chat
     let history = conversationHistory.get(chatId) || [];
-    history = history.slice(-9); // keep last 9 messages
+    history = history.slice(-9);
     history.push({ role: 'user', content: userText });
     conversationHistory.set(chatId, history);
 
@@ -172,7 +232,22 @@ client.on('message', async (message) => {
     }
 });
 
-// Set mode command handler
+// Help command
+async function handleHelpCommand(message) {
+    const helpText = `🤖 *Available Commands:*\n\n` +
+        `!help – show this menu\n` +
+        `!news – world news\n` +
+        `!news tech – tech news (also business, sports)\n` +
+        `!music <song name / YouTube link> – download audio\n` +
+        `!video <video name / YouTube link> – download video\n` +
+        `!setmode flirty – flirty personality\n` +
+        `!setmode angry – angry personality\n` +
+        `!setmode professional – formal tone\n` +
+        `!setmode normal – default friendly`;
+    await message.reply(helpText);
+}
+
+// Set mode command (with persistence)
 async function handleSetModeCommand(message, command) {
     const parts = command.split(' ');
     const mode = parts[1]?.toLowerCase();
@@ -181,57 +256,61 @@ async function handleSetModeCommand(message, command) {
         return;
     }
     currentMode = mode;
+    // Save to MongoDB
+    try {
+        await settingsCollection.updateOne(
+            { _id: 'ai_mode' },
+            { $set: { value: mode } },
+            { upsert: true }
+        );
+    } catch (error) {
+        console.error('Error saving mode:', error.message);
+    }
     await message.reply(`✅ Mode changed to *${mode}*. I will now reply with that personality.`);
 }
 
-// News command handler
+// News command
 async function handleNewsCommand(message, command) {
     const parts = command.split(' ');
     let category = 'world';
-    if (parts.length > 1 && parts[1] in NEWS_FEEDS) {
-        category = parts[1];
-    }
-
+    if (parts.length > 1 && parts[1] in NEWS_FEEDS) category = parts[1];
     const feedUrl = NEWS_FEEDS[category];
     try {
         const feed = await rssParser.parseURL(feedUrl);
         const items = feed.items.slice(0, 5);
         if (items.length === 0) {
-            await message.reply('No news found at the moment.');
+            await message.reply('No news found.');
             return;
         }
-
         let reply = `📰 *Top ${category} news:*\n\n`;
-        items.forEach((item, index) => {
-            reply += `${index + 1}. ${item.title}\n${item.link}\n\n`;
+        items.forEach((item, i) => {
+            reply += `${i + 1}. ${item.title}\n${item.link}\n\n`;
         });
         await message.reply(reply);
     } catch (error) {
-        console.error('News fetch error:', error.message);
-        await message.reply('Sorry, could not fetch news. Please try again later.');
+        console.error('News error:', error.message);
+        await message.reply('Sorry, could not fetch news.');
     }
 }
 
-// Music / video download handler
+// Download handler
 async function handleDownloadCommand(message, command) {
     const parts = command.split(' ');
     const type = parts[0];
     const query = parts.slice(1).join(' ').trim();
-
     if (!query) {
         await message.reply(`Please provide a YouTube link or search term.\nExample: !${type} never gonna give you up`);
         return;
     }
 
     await message.reply(`⏳ Searching for "${query}"...`);
-
     let videoUrl;
     if (ytdl.validateURL(query)) {
         videoUrl = query;
     } else {
         const searchResults = await ytSearch(query);
         if (!searchResults.videos.length) {
-            await message.reply('❌ No videos found for that search term.');
+            await message.reply('❌ No videos found.');
             return;
         }
         videoUrl = searchResults.videos[0].url;
@@ -266,21 +345,24 @@ async function handleDownloadCommand(message, command) {
                     .on('error', reject);
             });
         }
-
         const media = MessageMedia.fromFilePath(outputFile);
         await message.reply(media);
         fs.unlinkSync(outputFile);
     } catch (error) {
         console.error('Download error:', error.message);
-        await message.reply('❌ Download failed. Make sure the link is correct or the video is not too long.');
+        await message.reply('❌ Download failed.');
         if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
     }
 }
 
-// Initialize WhatsApp client
-client.initialize();
+// Initialize
+connectMongo().then(() => {
+    client.initialize();
+}).catch(err => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
+});
 
-// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
