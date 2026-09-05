@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
-const { Client, MessageMedia, AuthStrategy } = require('whatsapp-web.js'); // Added AuthStrategy
+const { Client, MessageMedia, RemoteAuth } = require('whatsapp-web.js'); // FIXED: Removed AuthStrategy, added RemoteAuth
 const qrcode = require('qrcode');
 const { OpenAI } = require('openai');
 const Parser = require('rss-parser');
@@ -24,10 +24,9 @@ const io = socketIO(server);
 app.use(express.static('public'));
 
 // ---------- Supabase PostgreSQL Setup ----------
-// Uses DATABASE_URL environment variable (must be set in Render)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // Required for Supabase
+  ssl: { rejectUnauthorized: false },
 });
 
 async function initDb() {
@@ -73,49 +72,35 @@ const MODE_PROMPTS = {
   professional: 'You are a professional business assistant bot. Be formal, polite, and concise. Use proper grammar and avoid slang.'
 };
 
-// ---------- Custom Auth Strategy (Supabase) ----------
-class SupabaseAuth extends AuthStrategy { // FIXED: Extends AuthStrategy
-  async setup(client) {
-    // No extra setup needed
+// ---------- Custom Store for RemoteAuth (Supabase) ----------
+class SupabaseStore {
+  async save(state) {
+    await pool.query(
+      'INSERT INTO bot_sessions (id, data) VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data=$2, updated_at=NOW()',
+      ['whatsapp_session', state]
+    );
   }
 
-  async beforeBrowserInitialized() {
-    // Called before browser is initialized
-  }
-
-  async afterBrowserInitialized() {
-    // Called after browser is initialized
-  }
-
-  async onAuthenticationNeeded() {
-    // Called when QR code is needed
-  }
-
-  async getSession() {
+  async extract() {
     const res = await pool.query('SELECT data FROM bot_sessions WHERE id=$1', ['whatsapp_session']);
     if (res.rows.length === 0) return null;
     return res.rows[0].data;
   }
 
-  async saveSession(session) {
-    await pool.query(
-      'INSERT INTO bot_sessions (id, data) VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data=$2, updated_at=NOW()',
-      ['whatsapp_session', session]
-    );
-  }
-
-  async removeSession() {
+  async delete() {
     await pool.query('DELETE FROM bot_sessions WHERE id=$1', ['whatsapp_session']);
   }
 }
 
 // WhatsApp client
 const client = new Client({
-  authStrategy: new SupabaseAuth(),
+  authStrategy: new RemoteAuth({
+    clientId: 'whatsapp-bot',
+    dataStore: new SupabaseStore()
+  }),
   puppeteer: {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    // executablePath: '/usr/bin/google-chrome-stable' // Uncomment if using Dockerfile approach
   }
 });
 
