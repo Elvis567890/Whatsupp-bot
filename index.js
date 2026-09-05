@@ -74,21 +74,29 @@ const MODE_PROMPTS = {
 
 // ---------- Custom Store for RemoteAuth (Supabase) ----------
 class SupabaseStore {
-  async save(state) {
+  // Check if a session already exists in the database (required by RemoteAuth)
+  async sessionExists({ session }) {
+    const res = await pool.query('SELECT 1 FROM bot_sessions WHERE id=$1', [session]);
+    return res.rows.length > 0;
+  }
+
+  async save({ session, data }) {
     await pool.query(
       'INSERT INTO bot_sessions (id, data) VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data=$2, updated_at=NOW()',
-      ['whatsapp_session', state]
+      [session, data]
     );
   }
 
-  async extract() {
-    const res = await pool.query('SELECT data FROM bot_sessions WHERE id=$1', ['whatsapp_session']);
+  async extract({ session, path }) {
+    const res = await pool.query('SELECT data FROM bot_sessions WHERE id=$1', [session]);
     if (res.rows.length === 0) return null;
-    return res.rows[0].data;
+    // Requires fs-extra to write the file to the local path
+    const fs = require('fs-extra');
+    await fs.outputFile(path, res.rows[0].data);
   }
 
-  async delete() {
-    await pool.query('DELETE FROM bot_sessions WHERE id=$1', ['whatsapp_session']);
+  async delete({ session }) {
+    await pool.query('DELETE FROM bot_sessions WHERE id=$1', [session]);
   }
 }
 
@@ -96,8 +104,9 @@ class SupabaseStore {
 const client = new Client({
   authStrategy: new RemoteAuth({
     clientId: 'whatsapp-bot',
-    store: new SupabaseStore(), // FIXED: Changed 'dataStore' to 'store' to match library requirement
+    store: new SupabaseStore(),
     backupSyncIntervalMs: 60000,
+    dataPath: '/tmp' // Prevents file-lock errors on Render
   }),
   puppeteer: {
     headless: true,
