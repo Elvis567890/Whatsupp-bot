@@ -1,11 +1,12 @@
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
-const { Client, MessageMedia, RemoteAuth } = require('whatsapp-web.js');
+const { Client, MessageMedia, RemoteAuth } = require('whatsapp-web.js'); // FIXED import
 const qrcode = require('qrcode');
 const { OpenAI } = require('openai');
 const Parser = require('rss-parser');
 const fs = require('fs');
+const fsExtra = require('fs-extra'); // ADDED: Required by this version of RemoteAuth
 const path = require('path');
 const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
@@ -74,12 +75,13 @@ const MODE_PROMPTS = {
 
 // ---------- Custom Store for RemoteAuth (Supabase) ----------
 class SupabaseStore {
-  // Check if a session already exists in the database (required by RemoteAuth)
+  // 1. Checks if a session exists in DB
   async sessionExists({ session }) {
     const res = await pool.query('SELECT 1 FROM bot_sessions WHERE id=$1', [session]);
     return res.rows.length > 0;
   }
 
+  // 2. Saves session to DB
   async save({ session, data }) {
     await pool.query(
       'INSERT INTO bot_sessions (id, data) VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data=$2, updated_at=NOW()',
@@ -87,14 +89,15 @@ class SupabaseStore {
     );
   }
 
+  // 3. Extracts session data from DB and writes it to the local file path provided by RemoteAuth
   async extract({ session, path }) {
     const res = await pool.query('SELECT data FROM bot_sessions WHERE id=$1', [session]);
     if (res.rows.length === 0) return null;
-    // Requires fs-extra to write the file to the local path
-    const fs = require('fs-extra');
-    await fs.outputFile(path, res.rows[0].data);
+    // This specific alpha version requires writing the file to disk to boot the browser
+    await fsExtra.outputFile(path, res.rows[0].data);
   }
 
+  // 4. Deletes session from DB
   async delete({ session }) {
     await pool.query('DELETE FROM bot_sessions WHERE id=$1', [session]);
   }
@@ -104,7 +107,7 @@ class SupabaseStore {
 const client = new Client({
   authStrategy: new RemoteAuth({
     clientId: 'whatsapp-bot',
-    store: new SupabaseStore(),
+    store: new SupabaseStore(), // Must match the store contract for v1.23.1-alpha.5
     backupSyncIntervalMs: 60000,
     dataPath: '/tmp' // Prevents file-lock errors on Render
   }),
@@ -174,7 +177,6 @@ client.on('ready', async () => {
   await client.sendMessage(adminNumber, helpText);
 });
 
-// Log when the session is successfully backed up to Supabase
 client.on('remote_session_saved', () => {
   console.log('✅ WhatsApp session successfully saved to Supabase!');
 });
@@ -235,7 +237,6 @@ client.on('message', async (message) => {
   const userText = message.body.trim();
   if (!userText) return;
 
-  // Commands
   if (userText.startsWith('!')) {
     const command = userText.slice(1).toLowerCase();
     if (command.startsWith('help')) {
@@ -286,7 +287,6 @@ client.on('message', async (message) => {
   }
 });
 
-// Help command
 async function handleHelp(message) {
   const helpText = `🤖 *Commands:*\n\n` +
     `!help – this menu\n` +
@@ -304,7 +304,6 @@ async function handleHelp(message) {
   await message.reply(helpText);
 }
 
-// Set mode
 async function handleSetMode(message, command) {
   const parts = command.split(' ');
   const mode = parts[1]?.toLowerCase();
@@ -320,7 +319,6 @@ async function handleSetMode(message, command) {
   await message.reply(`✅ Mode changed to *${mode}*.`);
 }
 
-// News
 async function handleNews(message, command) {
   const parts = command.split(' ');
   let category = 'world';
@@ -337,7 +335,6 @@ async function handleNews(message, command) {
   }
 }
 
-// Download
 async function handleDownload(message, command) {
   const parts = command.split(' ');
   const type = parts[0];
@@ -391,7 +388,6 @@ async function handleDownload(message, command) {
   }
 }
 
-// Send to specific contact
 async function handleSend(message, command) {
   const parts = command.split(' ');
   if (parts.length < 3) return message.reply('Usage: !send <name or number> <message>');
@@ -421,7 +417,6 @@ async function handleSend(message, command) {
   }
 }
 
-// Broadcast to all chats
 async function handleBroadcast(message, command) {
   const text = command.slice('broadcast'.length).trim();
   if (!text) return message.reply('Usage: !broadcast <message>');
@@ -438,7 +433,6 @@ async function handleBroadcast(message, command) {
   }
 }
 
-// Handle schedule command
 async function handleSchedule(message, command) {
   const parts = command.split(' ');
   if (parts.length < 4) {
@@ -499,7 +493,6 @@ async function handleSchedule(message, command) {
   }
 }
 
-// List user's schedules
 async function handleMySchedules(message) {
   try {
     const res = await pool.query('SELECT id, cron_expression, message FROM bot_schedules WHERE chat_id=$1 AND active=true', [message.from]);
@@ -514,7 +507,6 @@ async function handleMySchedules(message) {
   }
 }
 
-// Cancel a schedule
 async function handleCancelSchedule(message, command) {
   const id = parseInt(command.split(' ')[1]);
   if (!id) return message.reply('Usage: !cancelschedule <id>');
