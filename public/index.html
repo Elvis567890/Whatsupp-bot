@@ -1,48 +1,247 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>WhatsApp Bot Status</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Bot Control Center</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background-color: #f0f2f5; }
-        h1 { color: #075e54; }
-        #status { margin: 20px; font-size: 20px; font-weight: bold; }
-        #qr-container img { width: 300px; height: 300px; border: 4px solid #075e54; border-radius: 10px; }
-        #log { margin-top: 20px; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto; background: white; padding: 10px; border-radius: 5px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .status {
+            font-size: 16px;
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .status.waiting { background: #fff3cd; color: #856404; }
+        .status.ready { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        #qr-container {
+            margin: 20px auto;
+            padding: 20px;
+            background: #fff;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            display: none;
+        }
+        #qr-image {
+            max-width: 300px;
+            width: 100%;
+            height: auto;
+        }
+        #qr-text {
+            font-size: 12px;
+            color: #666;
+            word-break: break-all;
+            margin-top: 10px;
+            display: none;
+        }
+        .loading {
+            font-size: 18px;
+            color: #666;
+            margin: 20px 0;
+        }
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0,0,0,0.1);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .instructions {
+            margin-top: 20px;
+            text-align: left;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #333;
+        }
+        .instructions ol {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+        .refresh-btn {
+            margin-top: 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .refresh-btn:hover {
+            background: #5a6fd6;
+        }
     </style>
 </head>
 <body>
-    <h1>WhatsApp Bot Control</h1>
-    <div id="status">Waiting for QR code...</div>
-    <div id="qr-container"></div>
-    <div id="log"></div>
+    <div class="container">
+        <h1>🤖 WhatsApp Bot</h1>
+        
+        <!-- Status display -->
+        <div id="status" class="status waiting">
+            <div class="spinner"></div>
+            <span>Connecting to server...</span>
+        </div>
 
+        <!-- QR code display -->
+        <div id="qr-container">
+            <h3 style="color: #333; margin-bottom: 15px;">Scan this QR code with WhatsApp</h3>
+            <img id="qr-image" alt="QR Code" />
+            <div id="qr-text"></div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="instructions">
+            <strong>How to link:</strong>
+            <ol>
+                <li>Open WhatsApp on your phone</li>
+                <li>Go to <strong>Settings → Linked Devices → Link a Device</strong></li>
+                <li>Scan the QR code on this page</li>
+            </ol>
+        </div>
+
+        <button class="refresh-btn" onclick="location.reload()">🔄 Refresh Page</button>
+    </div>
+
+    <!-- Socket.IO client library -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
-        const logDiv = document.getElementById('log');
+        const statusDiv = document.getElementById('status');
+        const qrContainer = document.getElementById('qr-container');
+        const qrImage = document.getElementById('qr-image');
+        const qrText = document.getElementById('qr-text');
 
-        function logMessage(msg) {
-            const p = document.createElement('p');
-            p.textContent = msg;
-            logDiv.appendChild(p);
-        }
-
-        socket.on('qr', (qrImage) => {
-            document.getElementById('status').innerText = 'Scan this QR code with WhatsApp:';
-            document.getElementById('qr-container').innerHTML = `<img src="${qrImage}" alt="QR Code">`;
-            logMessage('QR code received');
+        // Connect to Socket.IO
+        const socket = io({
+            transports: ['websocket', 'polling']
         });
 
-        socket.on('ready', () => {
-            document.getElementById('status').innerText = '✅ WhatsApp connected!';
-            document.getElementById('qr-container').innerHTML = '';
-            logMessage('WhatsApp connected');
+        socket.on('connect', () => {
+            console.log('✅ Connected to server');
+            setStatus('info', 'Connected! Waiting for QR code or ready status...');
         });
 
         socket.on('disconnect', () => {
-            logMessage('Disconnected from server');
+            console.log('❌ Disconnected from server');
+            setStatus('error', 'Disconnected from server. Check your internet or server status.');
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('❌ Connection error:', error);
+            setStatus('error', 'Unable to connect to server. The server might be restarting or offline.');
+        });
+
+        // Receive QR code
+        socket.on('qr', (qrData) => {
+            console.log('📱 Received QR code data');
+            
+            // Check if it's a data URL (image) or a raw string
+            if (typeof qrData === 'string' && qrData.startsWith('data:image')) {
+                // It's a base64 image data URL
+                qrImage.src = qrData;
+                qrText.style.display = 'none';
+            } else if (typeof qrData === 'string') {
+                // It's a raw QR string - try to display as image or text
+                // Option 1: Use external QR generator (not reliable)
+                // Option 2: Display the raw string for manual conversion
+                qrImage.style.display = 'none';
+                qrText.style.display = 'block';
+                qrText.textContent = 'QR String (copy to QR generator):\n' + qrData;
+                
+                // Try to create a QR image using the API if possible
+                // This is a fallback - you can use any QR generation service
+                // For now, show text
+                setStatus('info', 'QR received. If you see text below, use a QR generator to scan it.');
+            }
+            
+            qrContainer.style.display = 'block';
+            setStatus('info', 'QR code ready! Scan it with your phone.');
+        });
+
+        // Receive ready status
+        socket.on('ready', () => {
+            console.log('✅ WhatsApp client is ready!');
+            qrContainer.style.display = 'none';
+            setStatus('ready', '✅ WhatsApp bot is ready and connected!');
+        });
+
+        // Receive auth failure
+        socket.on('auth_failure', (msg) => {
+            console.error('❌ Auth failure:', msg);
+            setStatus('error', 'Authentication failed: ' + (msg || 'Unknown error'));
+            qrContainer.style.display = 'none';
+        });
+
+        // Receive disconnected status
+        socket.on('disconnected', (reason) => {
+            console.warn('⚠️ Disconnected:', reason);
+            setStatus('warning', 'Bot disconnected: ' + reason);
+            qrContainer.style.display = 'none';
+        });
+
+        // Receive dashboard data (if backend sends it)
+        socket.on('dashboard_data', (data) => {
+            console.log('📊 Dashboard data received:', data);
+        });
+
+        // Helper function to update status
+        function setStatus(type, message) {
+            statusDiv.className = 'status ' + type;
+            statusDiv.innerHTML = message;
+            
+            // If it's a ready status, add a green checkmark
+            if (type === 'ready') {
+                statusDiv.innerHTML = '✅ ' + message;
+            }
+        }
+
+        // Check connection status after 5 seconds if no events
+        setTimeout(() => {
+            if (!socket.connected) {
+                setStatus('error', 'Failed to connect to server. Check if the backend is running.');
+            }
+        }, 5000);
+
+        // Handle page visibility (in case user switches tabs)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && !socket.connected) {
+                socket.connect();
+            }
         });
     </script>
 </body>
-        </html>
+                              </html>
