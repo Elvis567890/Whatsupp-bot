@@ -46,8 +46,9 @@ client.on('disconnected', (reason) => {
     console.log('🔄 Disconnected:', reason);
 });
 
-// Message handler
+// Message handler (with logging)
 client.on('message', async (message) => {
+    console.log('📩 Message received:', message.body, 'from', message.from);
     if (message.body === '!ping') {
         await message.reply('pong');
     }
