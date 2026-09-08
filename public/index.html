@@ -1,28 +1,295 @@
-{
-  "name": "whatsapp-bot",
-  "version": "1.0.0",
-  "description": "WhatsApp Bot with AI, News, Media Download, Scheduling",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "postinstall": "npx puppeteer browsers install chrome"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "ffmpeg-static": "^5.2.0",
-    "fluent-ffmpeg": "^2.1.2",
-    "fs-extra": "^11.2.0",
-    "node-schedule": "^2.1.1",
-    "openai": "^4.52.0",
-    "pg": "^8.12.0",
-    "qrcode": "^1.5.3",
-    "rss-parser": "^3.13.0",
-    "socket.io": "^4.7.5",
-    "wwebjs-supabase": "^1.0.0",
-    "whatsapp-web.js": "^1.23.1-alpha.5",
-    "yt-search": "^2.10.3",
-    "ytdl-core": "^4.11.5"
-  }
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Bot Control Center</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: #fff;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 550px;
+            width: 95%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        h1 { color: #333; margin-bottom: 20px; font-size: 28px; }
+        #status {
+            font-size: 16px;
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 500;
+            background: #f0f0f0;
+        }
+        #qr-section { margin-bottom: 20px; }
+        #qr-image {
+            max-width: 300px;
+            width: 100%;
+            border: 4px solid #eee;
+            border-radius: 10px;
+            margin: 10px auto;
+        }
+        #timer {
+            font-size: 14px;
+            color: #888;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .instructions {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: left;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .instructions ol { margin-left: 20px; line-height: 1.8; }
+        #dashboard { display: none; text-align: left; }
+        #dashboard h3 { margin-bottom: 15px; color: #333; }
+        .chat-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .chat-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .chat-item:hover { background: #f0f0f0; }
+        .send-box { display: flex; gap: 10px; margin-bottom: 20px; }
+        .send-box input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .btn {
+            padding: 10px 20px;
+            background: #25D366;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .btn:hover { background: #1da851; }
+        .btn-blue { background: #007bff; }
+        .btn-blue:hover { background: #0056b3; }
+        .refresh-btn {
+            padding: 10px 20px;
+            background: #f44336;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+        .refresh-btn:hover { background: #d32f2f; }
+        .status-ready { background: #d4edda !important; color: #155724 !important; }
+        .status-error { background: #f8d7da !important; color: #721c24 !important; }
+        .status-waiting { background: #fff3cd !important; color: #856404 !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 WhatsApp Bot</h1>
+        <div id="status" class="status-waiting">Connecting to server...</div>
+
+        <!-- QR CODE SECTION -->
+        <div id="qr-section">
+            <img id="qr-image" style="display:none;" alt="QR Code" />
+            <div id="timer"></div>
+            <div class="instructions">
+                <strong>How to link your WhatsApp:</strong>
+                <ol>
+                    <li>Open WhatsApp on your phone</li>
+                    <li>Go to <strong>Settings → Linked Devices → Link a Device</strong></li>
+                    <li>Scan the QR code on this page</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- DASHBOARD (after connection) -->
+        <div id="dashboard">
+            <h3>📊 Your Chats</h3>
+            <div class="chat-list" id="chat-list"></div>
+            <div class="send-box">
+                <input type="text" id="message-input" placeholder="Type message to broadcast..." />
+                <button class="btn" onclick="sendBroadcast()">Broadcast</button>
+            </div>
+            <button class="btn btn-blue" onclick="sendToOwner()">Send to Owner</button>
+        </div>
+
+        <button class="refresh-btn" onclick="window.location.reload()">🔄 Refresh Page</button>
+    </div>
+
+    <!-- Socket.IO Library -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const statusDiv = document.getElementById('status');
+        const qrSection = document.getElementById('qr-section');
+        const qrImage = document.getElementById('qr-image');
+        const timerDiv = document.getElementById('timer');
+        const dashboard = document.getElementById('dashboard');
+        const chatList = document.getElementById('chat-list');
+        const messageInput = document.getElementById('message-input');
+
+        let qrTimer = null;
+        let qrExpiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+        const socket = io({
+            transports: ['websocket', 'polling']
+        });
+
+        // Connection events
+        socket.on('connect', () => {
+            console.log('✅ Connected to server');
+            setStatus('Waiting for QR code or ready status...', 'waiting');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('❌ Disconnected from server');
+            setStatus('Disconnected from server. Check logs.', 'error');
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('❌ Connection error:', error);
+            setStatus('Connection failed. Server might be restarting.', 'error');
+        });
+
+        // QR Code received
+        socket.on('qr', (data) => {
+            console.log('📱 Received QR code');
+            qrSection.style.display = 'block';
+            dashboard.style.display = 'none';
+            setStatus('Scan the QR code below (valid for 10 minutes)', 'waiting');
+
+            if (typeof data === 'string' && data.startsWith('data:image')) {
+                qrImage.src = data;
+                qrImage.style.display = 'block';
+            } else {
+                qrImage.style.display = 'none';
+                timerDiv.textContent = 'QR String: ' + data;
+            }
+
+            // Reset timer
+            qrExpiresAt = Date.now() + 10 * 60 * 1000;
+            clearInterval(qrTimer);
+            qrTimer = setInterval(updateTimer, 1000);
+        });
+
+        // Ready event
+        socket.on('ready', () => {
+            console.log('✅ Bot is ready!');
+            qrSection.style.display = 'none';
+            dashboard.style.display = 'block';
+            setStatus('✅ Bot is Connected and Ready!', 'ready');
+            clearInterval(qrTimer);
+        });
+
+        socket.on('auth_failure', (msg) => {
+            setStatus('❌ Authentication failed: ' + msg, 'error');
+        });
+
+        socket.on('disconnected', (reason) => {
+            setStatus('⚠️ Bot disconnected: ' + reason, 'error');
+            qrSection.style.display = 'none';
+            dashboard.style.display = 'none';
+        });
+
+        // Dashboard data
+        socket.on('dashboard_data', (data) => {
+            console.log('📊 Dashboard data received');
+            chatList.innerHTML = '';
+            if (data.chats.length === 0) {
+                chatList.innerHTML = '<div style="padding:10px;color:#888;">No chats found.</div>';
+            } else {
+                data.chats.forEach(chat => {
+                    const item = document.createElement('div');
+                    item.className = 'chat-item';
+                    item.textContent = (chat.isGroup ? '👥 ' : '👤 ') + chat.name;
+                    item.onclick = () => {
+                        const msg = prompt('Enter message to send to ' + chat.name + ':');
+                        if (msg) {
+                            socket.emit('send_to_chats', { chatIds: [chat.id], message: msg });
+                        }
+                    };
+                    chatList.appendChild(item);
+                });
+            }
+        });
+
+        socket.on('send_result', (result) => {
+            if (result.success) {
+                alert('✅ Message sent successfully!');
+            } else {
+                alert('❌ Failed to send: ' + result.error);
+            }
+        });
+
+        // Timer update
+        function updateTimer() {
+            const remaining = Math.max(0, qrExpiresAt - Date.now());
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+            timerDiv.textContent = `⏱️ QR expires in: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (remaining === 0) {
+                clearInterval(qrTimer);
+                setStatus('QR expired. Waiting for new QR...', 'waiting');
+                qrImage.style.display = 'none';
+            }
+        }
+
+        // Set status function
+        function setStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = 'status-' + type;
+        }
+
+        // Broadcast function
+        function sendBroadcast() {
+            const msg = messageInput.value.trim();
+            if (!msg) return alert('Please enter a message first.');
+            
+            // Get all chat IDs from the displayed list (or send to all)
+            socket.emit('send_to_chats', { chatIds: [], message: msg });
+            messageInput.value = '';
+        }
+
+        // Send to owner (for testing)
+        function sendToOwner() {
+            const msg = prompt('Enter message to send to owner:');
+            if (msg) {
+                socket.emit('send_to_chats', { chatIds: [OWNER_NUMBER + '@c.us'], message: msg });
+            }
+        }
+
+        // Auto check after 10 seconds
+        setTimeout(() => {
+            if (!socket.connected) {
+                setStatus('Failed to connect to server after 10 seconds. Check logs.', 'error');
+            }
+        }, 10000);
+    </script>
+</body>
+  </html>
