@@ -1,7 +1,6 @@
 {
   "name": "whatsapp-bot",
   "version": "1.0.0",
-  "description": "WhatsApp Bot with AI, News, Media Download, Scheduling",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -13,14 +12,12 @@
     "express": "^4.19.2",
     "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.2",
-    "fs-extra": "^11.2.0",
     "node-schedule": "^2.1.1",
     "openai": "^4.52.0",
     "pg": "^8.12.0",
     "qrcode": "^1.5.3",
     "rss-parser": "^3.13.0",
     "socket.io": "^4.7.5",
-    "wwebjs-supabase": "^1.0.0",
     "whatsapp-web.js": "^1.23.1-alpha.5",
     "yt-search": "^2.10.3",
     "ytdl-core": "^4.11.5"
