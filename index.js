@@ -2,13 +2,11 @@ const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
 const { Client, RemoteAuth } = require('whatsapp-web.js');
-const { SupabaseStore } = require('wwebjs-supabase');
 const { createClient } = require('@supabase/supabase-js');
 const qrcode = require('qrcode');
 const { OpenAI } = require('openai');
 const Parser = require('rss-parser');
 const fs = require('fs');
-const fsExtra = require('fs-extra');
 const path = require('path');
 const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
@@ -27,69 +25,82 @@ app.use(express.static('public'));
 
 // ---------- DATABASE SETUP ----------
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-const pool = new Pool({ 
-  connectionString: process.env.DATABASE_URL, 
-  ssl: { rejectUnauthorized: false } 
-});
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
 async function initDb() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS bot_settings (
-      id TEXT PRIMARY KEY, 
-      value JSONB, 
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS bot_schedules (
-      id SERIAL PRIMARY KEY, 
-      chat_id TEXT NOT NULL, 
-      cron_expression TEXT NOT NULL, 
-      message TEXT NOT NULL, 
-      active BOOLEAN DEFAULT true, 
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
+    CREATE TABLE IF NOT EXISTS bot_settings (id TEXT PRIMARY KEY, value JSONB, updated_at TIMESTAMPTZ DEFAULT NOW());
+    CREATE TABLE IF NOT EXISTS bot_schedules (id SERIAL PRIMARY KEY, chat_id TEXT NOT NULL, cron_expression TEXT NOT NULL, message TEXT NOT NULL, active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT NOW());
   `);
   console.log('✅ Database ready');
 }
 initDb().catch(err => console.error('❌ DB init error:', err));
 
+// ---------- CUSTOM SESSION STORE (Stable) ----------
+class CustomSupabaseStore {
+  constructor(supabaseClient) {
+    this.supabase = supabaseClient;
+    this.table = 'whatsapp_sessions';
+  }
+
+  async sessionExists({ session }) {
+    const { data } = await this.supabase
+      .from(this.table)
+      .select('session_id')
+      .eq('session_id', session)
+      .maybeSingle();
+    return !!data;
+  }
+
+  async save({ session, data }) {
+    const { error } = await this.supabase
+      .from(this.table)
+      .upsert({ session_id: session, data: data, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  }
+
+  async extract({ session }) {
+    const { data } = await this.supabase
+      .from(this.table)
+      .select('data')
+      .eq('session_id', session)
+      .maybeSingle();
+    return data ? data.data : null;
+  }
+
+  async delete({ session }) {
+    const { error } = await this.supabase
+      .from(this.table)
+      .delete()
+      .eq('session_id', session);
+    if (error) throw error;
+  }
+}
+
 // ---------- AI SETUP ----------
 const OWNER_NUMBER = process.env.OWNER_NUMBER;
-const openai = new OpenAI({ 
-  apiKey: process.env.GROQ_API_KEY, 
-  baseURL: 'https://api.groq.com/openai/v1' 
-});
+const openai = new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' });
 const rssParser = new Parser();
 let currentMode = 'normal';
 
 const MODE_PROMPTS = {
-  normal: 'You are a friendly and helpful WhatsApp bot. You can chat naturally, tell jokes, and answer questions.',
-  angry: 'You are an angry and irritated WhatsApp bot. Respond with frustration and use CAPS or short, sharp sentences. Be rude but not overly offensive.',
-  flirty: 'You are a charming and flirty WhatsApp bot. Use pickup lines, compliments, and playful teasing. Keep it light and fun.',
-  professional: 'You are a professional business assistant bot. Be formal, polite, and concise. Use proper grammar and avoid slang.'
+  normal: 'You are a friendly and helpful WhatsApp bot.',
+  angry: 'You are an angry bot. Be rude.',
+  flirty: 'You are a flirty bot.',
+  professional: 'You are a professional bot.'
 };
 
-// ---------- TRUSTED SESSION STORE (wwebjs-supabase) ----------
-console.log('🚀 Attempting to start WhatsApp Client...');
-
+// ---------- WHATSAPP CLIENT SETUP ----------
 const client = new Client({
   authStrategy: new RemoteAuth({
     clientId: 'whatsapp-bot',
-    store: new SupabaseStore({ 
-      supabase, 
-      tableName: 'whatsapp_sessions' 
-    }),
+    store: new CustomSupabaseStore(supabase),
     backupSyncIntervalMs: 60000,
     dataPath: '/tmp'
   }),
   puppeteer: {
     headless: true,
-    args: [
-      '--no-sandbox', 
-      '--disable-setuid-sandbox', 
-      '--disable-dev-shm-usage', 
-      '--no-zygote', 
-      '--single-process'
-    ]
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote', '--single-process']
   }
 });
 
@@ -100,10 +111,8 @@ client.on('loading_screen', (percent, message) => {
 });
 
 client.on('qr', async (qr) => {
-  console.log('\n📱 QR Code generated (New) - Scan this within 10 minutes');
+  console.log('\n📱 QR Code generated - Scan within 10 minutes');
   console.log(qr);
-  console.log('----------------------------------------\n');
-
   const qrImage = await qrcode.toDataURL(qr);
   latestQr = qrImage;
   io.emit('qr', qrImage);
@@ -112,19 +121,9 @@ client.on('qr', async (qr) => {
 client.on('ready', async () => {
   console.log('✅ WhatsApp client is ready!');
   io.emit('ready');
-
   if (OWNER_NUMBER) {
     try {
-      const helpText = `🤖 *Bot is online!*\n\n` +
-        `Commands:\n` +
-        `!help – show this menu\n` +
-        `!setmode <flirty|angry|professional|normal>\n` +
-        `!send <phone> <message> – send to a contact\n` +
-        `!news – top world news\n` +
-        `!music <query> – download audio\n` +
-        `!video <query> – download video\n` +
-        `!broadcast <message> – send to all chats`;
-      await client.sendMessage(`${OWNER_NUMBER}@c.us`, helpText);
+      await client.sendMessage(`${OWNER_NUMBER}@c.us`, '🤖 Bot is online!');
     } catch (err) {
       console.error('Welcome message error:', err.message);
     }
@@ -150,10 +149,7 @@ async function sendDashboardData() {
       name: chat.name || chat.id.user,
       isGroup: chat.isGroup
     }));
-    io.emit('dashboard_data', { 
-      connectedNumber: client.info.wid.user, 
-      chats: chatList 
-    });
+    io.emit('dashboard_data', { connectedNumber: client.info.wid.user, chats: chatList });
   } catch (error) { 
     console.error('Error getting chats:', error.message); 
   }
@@ -194,12 +190,8 @@ async function generateAIReply(chatId, userText) {
   try {
     const completion = await openai.chat.completions.create({
       model: 'llama3-8b-8192',
-      messages: [{ 
-        role: 'system', 
-        content: MODE_PROMPTS[currentMode] || MODE_PROMPTS.normal 
-      }, ...history],
+      messages: [{ role: 'system', content: MODE_PROMPTS[currentMode] || MODE_PROMPTS.normal }, ...history],
       max_tokens: 150,
-      temperature: 0.7,
     });
     const reply = completion.choices[0].message.content.trim();
     history.push({ role: 'assistant', content: reply });
@@ -207,7 +199,7 @@ async function generateAIReply(chatId, userText) {
     return reply;
   } catch (error) {
     console.error('AI Error:', error.message);
-    return '😅 Sorry, I had a glitch. Please try again later.';
+    return '😅 Sorry, I had a glitch.';
   }
 }
 
@@ -217,82 +209,37 @@ client.on('message', async (message) => {
   const chatId = message.from;
   const isOwner = OWNER_NUMBER && chatId === `${OWNER_NUMBER}@c.us`;
 
-  // Handle owner commands
   if (isOwner) {
     const text = message.body.trim();
     if (text.startsWith('!')) {
       const command = text.slice(1).toLowerCase();
       try {
-        if (command.startsWith('help')) {
-          await message.reply(
-            '🤖 *Commands:*\n\n' +
-            '!help – this menu\n' +
-            '!setmode <flirty|angry|professional|normal>\n' +
-            '!send <phone> <message> – send to a contact\n' +
-            '!news – top world news\n' +
-            '!music <query> – download audio\n' +
-            '!video <query> – download video\n' +
-            '!broadcast <message> – send to all chats'
-          );
-        }
+        if (command.startsWith('help')) await message.reply('!setmode flirty\n!news\n!send <phone> <msg>');
         else if (command.startsWith('setmode')) {
           const mode = command.split(' ')[1];
-          if (MODE_PROMPTS[mode]) {
-            currentMode = mode;
-            await message.reply(`✅ Mode changed to *${mode}*.`);
-          } else {
-            await message.reply('Valid modes: angry, flirty, professional, normal');
-          }
+          if (MODE_PROMPTS[mode]) { currentMode = mode; await message.reply(`Mode set to ${mode}`); }
+          else await message.reply('Invalid mode.');
         }
         else if (command.startsWith('send')) {
           const parts = command.split(' ');
-          if (parts.length < 3) return message.reply('Usage: !send <phone> <message>');
-          const phone = parts[1];
-          const msg = parts.slice(2).join(' ');
-          await client.sendMessage(`${phone}@c.us`, msg);
-          await message.reply(`✅ Message sent to ${phone}`);
+          await client.sendMessage(`${parts[1]}@c.us`, parts.slice(2).join(' '));
+          await message.reply('✅ Sent!');
         }
-        else if (command.startsWith('news')) {
-          await message.reply('📰 News feature coming soon!');
-        }
-        else if (command.startsWith('broadcast')) {
-          const msg = command.slice('broadcast'.length).trim();
-          if (!msg) return message.reply('Usage: !broadcast <message>');
-          const chats = await client.getChats();
-          let count = 0;
-          for (const chat of chats) {
-            await chat.sendMessage(msg);
-            count++;
-          }
-          await message.reply(`✅ Broadcast sent to ${count} chats.`);
-        }
-        else {
-          await message.reply('❓ Unknown command. Type `!help` for list.');
-        }
-      } catch (err) {
-        console.error('Command error:', err);
-        await message.reply(`❌ Error: ${err.message}`);
-      }
+        else await message.reply('Unknown command.');
+      } catch (err) { await message.reply(`❌ Error: ${err.message}`); }
       return;
     }
-
-    // Owner chats with AI
     const reply = await generateAIReply(chatId, text);
     await message.reply(reply);
     return;
   }
 
-  // Non-owner messages: auto-reply + forward to owner
+  // Auto-reply to everyone else + Forward to owner
   if (OWNER_NUMBER) {
     try {
       const ownerChat = await client.getChatById(`${OWNER_NUMBER}@c.us`);
-      await ownerChat.sendMessage(
-        `📩 *Message from* ${message.from}\n` +
-        `*Message:* ${message.body}`
-      );
-    } catch (err) { 
-      console.error('Forward to owner failed:', err.message); 
-    }
+      await ownerChat.sendMessage(`📩 Message from ${message.from}: ${message.body}`);
+    } catch (err) { console.error('Forward failed:', err.message); }
   }
 
   const reply = await generateAIReply(chatId, message.body);
