@@ -5,21 +5,93 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WhatsApp Bot</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f4f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; max-width: 500px; width: 95%; }
+        body { 
+            font-family: Arial, sans-serif; 
+            background: #f4f4f4; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+        }
+        .container { 
+            background: #fff; 
+            padding: 30px; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+            text-align: center; 
+            max-width: 500px; 
+            width: 95%; 
+        }
         h1 { color: #333; }
         #status { margin: 20px 0; font-size: 18px; font-weight: bold; color: #555; }
-        #qr-image { max-width: 300px; margin: 20px auto; display: block; border: 4px solid #eee; border-radius: 8px; }
+        #qr-image { 
+            max-width: 300px; 
+            margin: 20px auto; 
+            display: block; 
+            border: 4px solid #eee; 
+            border-radius: 8px; 
+        }
         #timer { font-size: 14px; color: #888; }
-        .instructions { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: left; font-size: 14px; margin-top: 20px; }
+        .instructions { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 8px; 
+            text-align: left; 
+            font-size: 14px; 
+            margin-top: 20px; 
+        }
         .dashboard { display: none; text-align: left; }
-        .chat-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; }
-        .chat-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .chat-list { 
+            max-height: 300px; 
+            overflow-y: auto; 
+            border: 1px solid #ddd; 
+            border-radius: 8px; 
+            margin-bottom: 20px; 
+        }
+        .chat-item { 
+            padding: 10px; 
+            border-bottom: 1px solid #eee; 
+            cursor: pointer; 
+        }
         .chat-item:hover { background: #f0f0f0; }
         .send-box { display: flex; gap: 10px; }
-        .send-box input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        .send-box button { padding: 10px 20px; background: #25D366; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
-        .refresh-btn { margin-top: 20px; padding: 10px 20px; background: #f44336; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
+        .send-box input { 
+            flex: 1; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            border-radius: 5px; 
+        }
+        .send-box button { 
+            padding: 10px 20px; 
+            background: #25D366; 
+            color: #fff; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+        }
+        .refresh-btn { 
+            margin-top: 20px; 
+            padding: 10px 20px; 
+            background: #f44336; 
+            color: #fff; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+        }
+        .toast { 
+            position: fixed; 
+            bottom: 20px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            background: #333; 
+            color: #fff; 
+            padding: 10px 20px; 
+            border-radius: 5px; 
+            z-index: 1000; 
+            font-size: 14px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
     </style>
 </head>
 <body>
@@ -35,7 +107,7 @@
             <ol>
                 <li>Open WhatsApp</li>
                 <li>Settings → Linked Devices → Link a Device</li>
-                <li>Scan QR</li>
+                <li>Scan the current QR code</li>
             </ol>
         </div>
 
@@ -65,19 +137,38 @@
         let qrExpiry = Date.now() + 10 * 60 * 1000;
         let interval;
 
-        socket.on('connect', () => { status.textContent = 'Connected! Waiting for QR...'; });
-        socket.on('disconnect', () => { status.textContent = 'Disconnected!'; });
+        socket.on('connect', () => { 
+            status.textContent = 'Connected! Waiting for QR...'; 
+        });
+
+        socket.on('disconnect', () => { 
+            status.textContent = 'Disconnected!'; 
+        });
 
         socket.on('qr', (data) => {
-            status.textContent = 'Scan QR below (10 min)';
+            // Show new QR message
+            status.textContent = '📱 New QR generated! Scan it now.';
             status.style.color = 'orange';
+            
+            // Hide dashboard, show QR
             dashboard.style.display = 'none';
             instructions.style.display = 'block';
+            
+            // Set the QR image
             qrImage.src = data;
             qrImage.style.display = 'block';
+            
+            // Reset timer to 10 minutes
             qrExpiry = Date.now() + 10 * 60 * 1000;
             clearInterval(interval);
             interval = setInterval(updateTimer, 1000);
+            
+            // Show a temporary toast notification
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = 'QR updated! Scan the new code.';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
         });
 
         socket.on('ready', () => {
@@ -103,19 +194,29 @@
             });
         });
 
-        socket.on('send_result', (r) => { if (r.success) alert('✅ Sent!'); else alert('❌ ' + r.error); });
+        socket.on('send_result', (r) => { 
+            if (r.success) alert('✅ Sent!'); 
+            else alert('❌ ' + r.error); 
+        });
 
         function updateTimer() {
             const rem = Math.max(0, qrExpiry - Date.now());
             const m = Math.floor(rem / 60000);
             const s = Math.floor((rem % 60000) / 1000);
             timer.textContent = `Expires: ${m}:${s.toString().padStart(2, '0')}`;
-            if (rem === 0) { clearInterval(interval); status.textContent = 'QR expired. Waiting...'; qrImage.style.display = 'none'; }
+            if (rem === 0) { 
+                clearInterval(interval); 
+                status.textContent = 'QR expired. Waiting for new one...'; 
+                qrImage.style.display = 'none'; 
+            }
         }
 
         function broadcast() {
             const msg = msgInput.value.trim();
-            if (msg) { socket.emit('send_to_chats', { chatIds: [], message: msg }); msgInput.value = ''; }
+            if (msg) { 
+                socket.emit('send_to_chats', { chatIds: [], message: msg }); 
+                msgInput.value = ''; 
+            }
         }
     </script>
 </body>
