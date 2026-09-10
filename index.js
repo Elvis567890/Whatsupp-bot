@@ -62,11 +62,11 @@ const rssParser = new Parser();
 let currentMode = 'normal';
 
 const MODE_PROMPTS = {
-  normal: 'You are a friendly and helpful WhatsApp bot. You chat naturally, tell jokes, and answer questions.',
-  hungry: 'You are a food-loving bot. You ALWAYS bring up food, snacks, or eating. Be playful and funny about it.',
-  happy: 'You are a super cheerful and optimistic bot. You spread good vibes and always reply with joy.',
-  sleepy: 'You are a sleepy, tired bot. You yawn, reply slowly, and often mention wanting to sleep.',
-  pickupline: 'You are a flirty, romantic bot. You use clever, charming pickup lines in your replies.'
+  normal: 'You are a friendly and helpful WhatsApp bot.',
+  hungry: 'You are a food-loving bot. Always mention food.',
+  happy: 'You are a super cheerful bot.',
+  sleepy: 'You are a sleepy bot. Reply lazily.',
+  pickupline: 'You are a flirty bot. Use pickup lines.'
 };
 
 // ---------- WHATSAPP CLIENT ----------
@@ -83,31 +83,77 @@ const client = new Client({
   }
 });
 
-let latestQr = null;
+// ---------- QR QUEUE (the feature you asked for) ----------
+const MAX_QR_HISTORY = 20;        // listen to the last 20 QR codes
+const qrQueue = [];                // { id, image, createdAt }
+let qrCounter = 0;                 // increments for each QR
+let successfulQrId = null;         // which QR succeeded (set on 'authenticated')
 let isAuthenticating = false;
 let isReady = false;
 
+// Add a new QR to the queue
+function pushQr(image) {
+  qrCounter++;
+  const entry = { id: qrCounter, image, createdAt: Date.now() };
+  qrQueue.push(entry);
+  // Keep only the last 20
+  while (qrQueue.length > MAX_QR_HISTORY) {
+    const dropped = qrQueue.shift();
+    console.log(`🗑️  Dropped old QR #${dropped.id} (queue full)`);
+  }
+  console.log(`📱 QR #${entry.id} generated — queue size: ${qrQueue.length}/${MAX_QR_HISTORY}`);
+  return entry;
+}
+
+// Clear the queue (called when session succeeds or when we give up)
+function clearQrQueue(reason) {
+  if (qrQueue.length > 0) {
+    console.log(`🧹 Clearing QR queue (${qrQueue.length} entries) — ${reason}`);
+  }
+  qrQueue.length = 0;
+  latestQr = null;
+}
+
+let latestQr = null;
+
+// ---------- CLIENT EVENTS ----------
 client.on('qr', async (qr) => {
+  // While authenticating or already ready, ignore new QRs
   if (isAuthenticating || isReady) {
     console.log('⏭️  Ignoring new QR — already authenticating or ready');
     return;
   }
-  console.log('\n📱 QR Code generated — scan within 20 seconds');
+
   const qrImage = await qrcode.toDataURL(qr);
-  latestQr = qrImage;
-  io.emit('qr', qrImage);
+  const entry = pushQr(qrImage);
+  latestQr = entry.image;
+
+  // Send to all connected clients
+  io.emit('qr', { id: entry.id, image: entry.image, queueSize: qrQueue.length });
 });
 
 client.on('authenticated', () => {
-  console.log('🔐 Authenticated! Waiting for full session load...');
+  console.log('🔐 Authenticated! A QR in the queue succeeded.');
   isAuthenticating = true;
+
+  // Mark the most recent QR as the successful one
+  const last = qrQueue[qrQueue.length - 1];
+  successfulQrId = last ? last.id : null;
+  console.log(`✅ Successful QR #${successfulQrId}`);
+
+  // Clear the rest of the queue — only keep the winning one in memory
+  qrQueue.length = 0;
+  if (last) qrQueue.push(last);
   latestQr = null;
-  io.emit('authenticated');
+
+  io.emit('authenticated', { qrId: successfulQrId });
 });
 
 client.on('auth_failure', (msg) => {
   console.error('❌ Auth failed:', msg);
   isAuthenticating = false;
+  successfulQrId = null;
+  clearQrQueue('auth failure');
   io.emit('auth_failure', msg);
 });
 
@@ -115,8 +161,14 @@ client.on('ready', async () => {
   console.log('✅ WhatsApp client is ready!');
   isAuthenticating = false;
   isReady = true;
-  io.emit('ready');
 
+  // Session succeeded — clear the QR queue completely
+  clearQrQueue('session ready');
+
+  io.emit('ready', { qrId: successfulQrId });
+  successfulQrId = null;
+
+  // Load saved mode
   try {
     const res = await pool.query('SELECT value FROM bot_settings WHERE id=$1', ['ai_mode']);
     if (res.rows.length > 0 && res.rows[0].value?.mode in MODE_PROMPTS) {
@@ -124,10 +176,11 @@ client.on('ready', async () => {
     }
   } catch (err) { console.error('Load mode error:', err.message); }
 
+  // Welcome message
   if (OWNER_NUMBER) {
     try {
       await client.sendMessage(`${OWNER_NUMBER}@c.us`, '🤖 Bot is online! Mode: ' + currentMode);
-    } catch (err) { console.error('Welcome message error:', err.message); }
+    } catch (err) { console.error('Welcome error:', err.message); }
   }
 });
 
@@ -135,6 +188,8 @@ client.on('disconnected', (reason) => {
   console.warn('⚠️ Disconnected:', reason);
   isReady = false;
   isAuthenticating = false;
+  successfulQrId = null;
+  clearQrQueue('disconnected');
   io.emit('disconnected', reason);
 });
 
@@ -157,13 +212,15 @@ async function sendDashboardData() {
 
 // ---------- SOCKET EVENTS ----------
 io.on('connection', (socket) => {
+  // Send current state to newly-connected client
   if (isReady && client.info?.wid) {
     socket.emit('ready');
     sendDashboardData();
   } else if (isAuthenticating) {
-    socket.emit('authenticated');
+    socket.emit('authenticated', { qrId: successfulQrId });
   } else if (latestQr) {
-    socket.emit('qr', latestQr);
+    const last = qrQueue[qrQueue.length - 1];
+    socket.emit('qr', { id: last.id, image: latestQr, queueSize: qrQueue.length });
   }
 
   socket.on('set_mode', async (mode) => {
@@ -174,7 +231,6 @@ io.on('connection', (socket) => {
         ['ai_mode', { mode }]
       );
       io.emit('mode_updated', mode);
-      console.log('✅ Mode changed to:', mode);
     }
   });
 
@@ -196,7 +252,7 @@ async function generateAIReply(chatId, userText) {
     const msgs = await chat.fetchMessages({ limit: 10 });
     const history = msgs
       .map(m => ({ role: m.fromMe ? 'assistant' : 'user', content: m.body }))
-      .filter(m => m.content && m.content.length > 0);
+      .filter(m => m.content);
     history.push({ role: 'user', content: userText });
 
     const completion = await openai.chat.completions.create({
@@ -208,7 +264,7 @@ async function generateAIReply(chatId, userText) {
     return completion.choices[0].message.content.trim();
   } catch (e) {
     console.error('AI Error:', e.message);
-    return '😅 Sorry, I had a glitch. Please try again.';
+    return '😅 Sorry, I had a glitch.';
   }
 }
 
@@ -225,10 +281,9 @@ client.on('message', async (message) => {
       try {
         if (cmd.startsWith('help')) {
           return message.reply(
-            'Commands:\n' +
             '!help - show this\n' +
             '!setmode <mode> - change AI mode\n' +
-            '!send <phone> <msg> - send to a number\n\n' +
+            '!send <phone> <msg> - send to number\n\n' +
             'Modes: normal, hungry, happy, sleepy, pickupline'
           );
         }
@@ -240,7 +295,7 @@ client.on('message', async (message) => {
               'INSERT INTO bot_settings (id,value) VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET value=$2',
               ['ai_mode', { mode: m }]
             );
-            return message.reply(`✅ Mode changed to *${m}*`);
+            return message.reply(`✅ Mode: *${m}*`);
           }
           return message.reply('Invalid mode.');
         }
@@ -250,20 +305,19 @@ client.on('message', async (message) => {
           await client.sendMessage(`${p[1]}@c.us`, p.slice(2).join(' '));
           return message.reply('✅ Sent!');
         }
-        return message.reply('Unknown command. Use !help');
+        return message.reply('Unknown. Use !help');
       } catch (err) {
-        return message.reply(`❌ Error: ${err.message}`);
+        return message.reply(`❌ ${err.message}`);
       }
     }
     return message.reply(await generateAIReply(chatId, t));
   }
 
-  // Non-owner: forward to owner + auto-reply
   if (OWNER_NUMBER) {
     try {
       const oc = await client.getChatById(`${OWNER_NUMBER}@c.us`);
       await oc.sendMessage(`📩 From ${message.from}: ${message.body}`);
-    } catch (err) { console.error('Forward failed:', err.message); }
+    } catch {}
   }
   await message.reply(await generateAIReply(chatId, message.body));
 });
