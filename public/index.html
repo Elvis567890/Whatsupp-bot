@@ -3,105 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Bot</title>
+    <title>WhatsApp Smart Bot</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            background: #f4f4f4; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-        }
-        .container { 
-            background: #fff; 
-            padding: 30px; 
-            border-radius: 10px; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
-            text-align: center; 
-            max-width: 500px; 
-            width: 95%; 
-        }
-        h1 { color: #333; }
+        body { font-family: Arial, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background: #fff; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); text-align: center; max-width: 550px; width: 95%; }
+        h1 { color: #333; margin-bottom: 20px; }
         #status { margin: 20px 0; font-size: 18px; font-weight: bold; color: #555; }
-        #qr-image { 
-            max-width: 300px; 
-            margin: 20px auto; 
-            display: block; 
-            border: 4px solid #eee; 
-            border-radius: 8px; 
-        }
-        #timer { font-size: 14px; color: #888; }
-        .instructions { 
-            background: #f8f9fa; 
-            padding: 15px; 
-            border-radius: 8px; 
-            text-align: left; 
-            font-size: 14px; 
-            margin-top: 20px; 
-        }
+        #qr-image { max-width: 280px; margin: 20px auto; display: block; border: 4px solid #eee; border-radius: 8px; }
+        .instructions { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: left; font-size: 14px; margin-top: 20px; }
         .dashboard { display: none; text-align: left; }
-        .chat-list { 
-            max-height: 300px; 
-            overflow-y: auto; 
-            border: 1px solid #ddd; 
-            border-radius: 8px; 
-            margin-bottom: 20px; 
-        }
-        .chat-item { 
-            padding: 10px; 
-            border-bottom: 1px solid #eee; 
-            cursor: pointer; 
-        }
+        .mode-selector { margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+        .mode-selector h4 { margin: 0 0 10px 0; }
+        .mode-btn { display: inline-block; padding: 8px 15px; margin: 5px; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s; }
+        .mode-btn.active { box-shadow: 0 4px 10px rgba(0,0,0,0.2); transform: scale(1.05); }
+        .mode-normal { background: #ccc; color: #333; }
+        .mode-hungry { background: #ff9800; color: white; }
+        .mode-happy { background: #4CAF50; color: white; }
+        .mode-sleepy { background: #3f51b5; color: white; }
+        .mode-pickupline { background: #e91e63; color: white; }
+        .chat-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; }
+        .chat-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
         .chat-item:hover { background: #f0f0f0; }
         .send-box { display: flex; gap: 10px; }
-        .send-box input { 
-            flex: 1; 
-            padding: 10px; 
-            border: 1px solid #ccc; 
-            border-radius: 5px; 
-        }
-        .send-box button { 
-            padding: 10px 20px; 
-            background: #25D366; 
-            color: #fff; 
-            border: none; 
-            border-radius: 5px; 
-            cursor: pointer; 
-        }
-        .refresh-btn { 
-            margin-top: 20px; 
-            padding: 10px 20px; 
-            background: #f44336; 
-            color: #fff; 
-            border: none; 
-            border-radius: 5px; 
-            cursor: pointer; 
-        }
-        .toast { 
-            position: fixed; 
-            bottom: 20px; 
-            left: 50%; 
-            transform: translateX(-50%); 
-            background: #333; 
-            color: #fff; 
-            padding: 10px 20px; 
-            border-radius: 5px; 
-            z-index: 1000; 
-            font-size: 14px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        }
+        .send-box input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .send-box button { padding: 10px 20px; background: #25D366; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
+        .refresh-btn { margin-top: 20px; padding: 10px 20px; background: #f44336; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 20px; border-radius: 5px; z-index: 1000; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🤖 WhatsApp Bot</h1>
+        <h1>🤖 Smart Bot</h1>
         <div id="status">Connecting...</div>
         
         <img id="qr-image" style="display:none;" />
-        <div id="timer"></div>
-        
         <div class="instructions" id="instructions">
             <strong>How to link:</strong>
             <ol>
@@ -112,10 +47,20 @@
         </div>
 
         <div class="dashboard" id="dashboard">
-            <h3>Chats</h3>
+            <div class="mode-selector">
+                <h4>🎭 Bot Personality Mode</h4>
+                <button class="mode-btn mode-normal" onclick="setMode('normal')">Normal</button>
+                <button class="mode-btn mode-hungry" onclick="setMode('hungry')">🍔 Hungry</button>
+                <button class="mode-btn mode-happy" onclick="setMode('happy')">😊 Happy</button>
+                <button class="mode-btn mode-sleepy" onclick="setMode('sleepy')">😴 Sleepy</button>
+                <button class="mode-btn mode-pickupline" onclick="setMode('pickupline')">💘 Pick-up</button>
+            </div>
+
+            <h3>💬 Chats</h3>
             <div class="chat-list" id="chat-list"></div>
+            
             <div class="send-box">
-                <input type="text" id="msg" placeholder="Type message..." />
+                <input type="text" id="msg" placeholder="Broadcast to all..." />
                 <button onclick="broadcast()">Broadcast</button>
             </div>
         </div>
@@ -127,43 +72,24 @@
     <script>
         const status = document.getElementById('status');
         const qrImage = document.getElementById('qr-image');
-        const timer = document.getElementById('timer');
         const instructions = document.getElementById('instructions');
         const dashboard = document.getElementById('dashboard');
         const chatList = document.getElementById('chat-list');
         const msgInput = document.getElementById('msg');
-
+        
         const socket = io();
-        let qrExpiry = Date.now() + 10 * 60 * 1000;
-        let interval;
+        let currentMode = 'normal';
 
-        socket.on('connect', () => { 
-            status.textContent = 'Connected! Waiting for QR...'; 
-        });
-
-        socket.on('disconnect', () => { 
-            status.textContent = 'Disconnected!'; 
-        });
+        socket.on('connect', () => status.textContent = 'Connected! Waiting for QR...');
+        socket.on('disconnect', () => status.textContent = 'Disconnected!');
 
         socket.on('qr', (data) => {
-            // Show new QR message
             status.textContent = '📱 New QR generated! Scan it now.';
             status.style.color = 'orange';
-            
-            // Hide dashboard, show QR
             dashboard.style.display = 'none';
             instructions.style.display = 'block';
-            
-            // Set the QR image
             qrImage.src = data;
             qrImage.style.display = 'block';
-            
-            // Reset timer to 10 minutes
-            qrExpiry = Date.now() + 10 * 60 * 1000;
-            clearInterval(interval);
-            interval = setInterval(updateTimer, 1000);
-            
-            // Show a temporary toast notification
             const toast = document.createElement('div');
             toast.className = 'toast';
             toast.textContent = 'QR updated! Scan the new code.';
@@ -177,46 +103,46 @@
             qrImage.style.display = 'none';
             instructions.style.display = 'none';
             dashboard.style.display = 'block';
-            clearInterval(interval);
         });
 
         socket.on('dashboard_data', (data) => {
+            currentMode = data.currentMode || 'normal';
+            highlightMode();
             chatList.innerHTML = '';
             data.chats.forEach(chat => {
                 const div = document.createElement('div');
                 div.className = 'chat-item';
-                div.textContent = (chat.isGroup ? '👥 ' : '👤 ') + chat.name;
+                div.innerHTML = `<span>${chat.isGroup ? '👥' : '👤'}</span> <span>${chat.name}</span>`;
                 div.onclick = () => {
-                    const m = prompt('Message to ' + chat.name + ':');
-                    if (m) socket.emit('send_to_chats', { chatIds: [chat.id], message: m });
+                    const msg = prompt('Send direct message to ' + chat.name + ':');
+                    if (msg) socket.emit('send_to_chats', { chatIds: [chat.id], message: msg });
                 };
                 chatList.appendChild(div);
             });
         });
 
-        socket.on('send_result', (r) => { 
-            if (r.success) alert('✅ Sent!'); 
-            else alert('❌ ' + r.error); 
+        socket.on('mode_updated', (mode) => {
+            currentMode = mode;
+            highlightMode();
         });
 
-        function updateTimer() {
-            const rem = Math.max(0, qrExpiry - Date.now());
-            const m = Math.floor(rem / 60000);
-            const s = Math.floor((rem % 60000) / 1000);
-            timer.textContent = `Expires: ${m}:${s.toString().padStart(2, '0')}`;
-            if (rem === 0) { 
-                clearInterval(interval); 
-                status.textContent = 'QR expired. Waiting for new one...'; 
-                qrImage.style.display = 'none'; 
-            }
+        socket.on('send_result', (r) => { if (r.success) alert('✅ Sent!'); else alert('❌ ' + r.error); });
+
+        function setMode(mode) {
+            socket.emit('set_mode', mode);
+            currentMode = mode;
+            highlightMode();
+        }
+
+        function highlightMode() {
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            const btn = document.querySelector('.mode-' + currentMode);
+            if (btn) btn.classList.add('active');
         }
 
         function broadcast() {
             const msg = msgInput.value.trim();
-            if (msg) { 
-                socket.emit('send_to_chats', { chatIds: [], message: msg }); 
-                msgInput.value = ''; 
-            }
+            if (msg) { socket.emit('send_to_chats', { chatIds: [], message: msg }); msgInput.value = ''; }
         }
     </script>
 </body>
