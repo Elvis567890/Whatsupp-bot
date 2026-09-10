@@ -42,6 +42,7 @@ class CustomSupabaseStore {
   }
 }
 
+// ----- FIX: Clean the number and set the pairing option -----
 const OWNER_NUMBER = (process.env.OWNER_NUMBER || '').replace(/[^0-9]/g, '').replace(/^0+/, '');
 console.log('📞 OWNER_NUMBER:', OWNER_NUMBER);
 
@@ -63,6 +64,10 @@ const client = new Client({
     backupSyncIntervalMs: 60000,
     dataPath: '/tmp'
   }),
+  // 👇 THIS IS THE FIX
+  pairWithPhoneNumber: {
+    phoneNumber: OWNER_NUMBER
+  },
   puppeteer: {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote', '--single-process']
@@ -72,31 +77,21 @@ const client = new Client({
 let latestQr = null;
 let isAuthenticating = false;
 let isReady = false;
-let pairingCodeInFlight = false;
 
+// Send QR to the frontend as a fallback
 client.on('qr', async (qr) => {
   if (isAuthenticating || isReady) return;
-
   const qrImage = await qrcode.toDataURL(qr);
   latestQr = qrImage;
   io.emit('qr', qrImage);
+});
 
-  // Request a fresh pairing code on every QR (unless one is already in flight)
-  if (OWNER_NUMBER && !pairingCodeInFlight) {
-    pairingCodeInFlight = true;
-    try {
-      const code = await client.requestPairingCode(OWNER_NUMBER);
-      console.log('\n╔════════════════════════════════════════╗');
-      console.log(`║  🔑 NEW PAIRING CODE:  ${code}  ║`);
-      console.log('╚════════════════════════════════════════╝\n');
-      // Send as plain string so the frontend displays it directly
-      io.emit('pairing_code', code);
-    } catch (err) {
-      console.error('❌ Pairing code failed:', err.message);
-    } finally {
-      pairingCodeInFlight = false;
-    }
-  }
+// ----- NEW: Listen for the pairing code -----
+client.on('code', (code) => {
+  console.log('\n╔════════════════════════════════════════╗');
+  console.log(`║  🔑 PAIRING CODE:  ${code}  ║`);
+  console.log('╚════════════════════════════════════════╝\n');
+  io.emit('pairing_code', code); // sends the plain string
 });
 
 client.on('authenticated', () => {
