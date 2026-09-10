@@ -6,60 +6,61 @@
 <title>WhatsApp Bot</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-  .container { background: #fff; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); text-align: center; max-width: 560px; width: 100%; }
-  h1 { color: #333; margin-bottom: 20px; }
-  #status { margin: 20px 0; font-size: 18px; font-weight: bold; color: #555; }
+  body { font-family: Arial, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; margin: 0; padding: 20px; }
+  .container { background: #fff; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); text-align: center; max-width: 560px; width: 100%; }
+  h1 { color: #333; margin: 0 0 15px 0; font-size: 22px; }
+  #status { margin: 15px 0; font-size: 16px; font-weight: bold; color: #555; }
 
   #pairing-section {
     display: none;
     background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
     color: #fff;
-    padding: 25px;
+    padding: 20px;
     border-radius: 12px;
-    margin: 20px 0;
-    box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+    margin: 15px 0;
   }
-  #pairing-section h2 { margin: 0 0 10px 0; font-size: 18px; }
+  #pairing-section h2 { margin: 0 0 10px 0; font-size: 16px; }
   #pairing-code {
-    font-size: 42px;
+    font-size: 36px;
     font-weight: bold;
-    letter-spacing: 8px;
+    letter-spacing: 6px;
     font-family: 'Courier New', monospace;
     background: rgba(255,255,255,0.25);
-    padding: 18px;
+    padding: 14px;
     border-radius: 8px;
-    margin: 15px 0;
+    margin: 12px 0;
     user-select: all;
     cursor: pointer;
+    word-break: break-all;
   }
-  #pairing-countdown { font-size: 14px; margin-top: 8px; opacity: 0.9; }
-  #pairing-section p { margin: 5px 0; font-size: 14px; }
+  #pairing-countdown { font-size: 13px; margin-top: 6px; opacity: 0.95; }
+  #pairing-section p { margin: 5px 0; font-size: 13px; }
 
-  #qr-image { max-width: 260px; width: 90%; margin: 20px auto; display: block; border: 4px solid #25D366; border-radius: 8px; }
-  #timer { font-size: 14px; color: #f44336; font-weight: bold; margin: 10px 0; }
+  #qr-image { max-width: 240px; width: 90%; margin: 15px auto; display: block; border: 4px solid #25D366; border-radius: 8px; }
+  #timer { font-size: 13px; color: #f44336; font-weight: bold; margin: 8px 0; }
 
-  .instructions { background: #fff3cd; padding: 15px; border-radius: 8px; text-align: left; font-size: 14px; border-left: 4px solid #ff9800; margin-top: 15px; }
-  .instructions ol { margin: 10px 0 0 20px; }
+  .instructions { background: #fff3cd; padding: 12px; border-radius: 8px; text-align: left; font-size: 13px; border-left: 4px solid #ff9800; margin-top: 12px; }
+  .instructions ol { margin: 8px 0 0 18px; padding: 0; }
+  .instructions li { margin-bottom: 4px; }
 
   .dashboard { display: none; text-align: left; }
-  .mode-selector { padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px; }
-  .mode-btn { display: inline-block; padding: 8px 15px; margin: 5px; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; }
+  .mode-selector { padding: 12px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px; }
+  .mode-btn { display: inline-block; padding: 6px 12px; margin: 4px; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 13px; }
   .mode-btn.active { box-shadow: 0 4px 10px rgba(0,0,0,0.3); transform: scale(1.05); }
   .mode-normal { background: #ccc; color: #333; }
   .mode-hungry { background: #ff9800; color: #fff; }
   .mode-happy { background: #4CAF50; color: #fff; }
   .mode-sleepy { background: #3f51b5; color: #fff; }
   .mode-pickupline { background: #e91e63; color: #fff; }
-  .chat-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; }
-  .chat-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
-  .send-box { display: flex; gap: 10px; }
-  .send-box input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-  .send-box button { padding: 10px 20px; background: #25D366; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
+  .chat-list { max-height: 260px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; }
+  .chat-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 14px; }
+  .send-box { display: flex; gap: 8px; }
+  .send-box input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; }
+  .send-box button { padding: 10px 15px; background: #25D366; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
 
-  .spinner { border: 6px solid #f3f3f3; border-top: 6px solid #25D366; border-radius: 50%; width: 50px; height: 50px; margin: 20px auto; animation: spin 1s linear infinite; }
+  .spinner { border: 6px solid #f3f3f3; border-top: 6px solid #25D366; border-radius: 50%; width: 45px; height: 45px; margin: 15px auto; animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 12px 20px; border-radius: 6px; z-index: 1000; font-size: 14px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 18px; border-radius: 6px; z-index: 1000; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -70,43 +71,43 @@
   <div id="auth-loading" style="display:none;">
     <div class="spinner"></div>
     <p style="color:#25D366;font-weight:bold;">🔐 Authenticated! Loading chats...</p>
-    <p style="color:#888;font-size:14px;">This takes 1–2 minutes. Please wait.</p>
   </div>
 
   <div id="pairing-section">
     <h2>🔑 Pairing Code</h2>
     <div id="pairing-code">----</div>
-    <div id="pairing-countdown">⏱️ Code expires in 60s</div>
-    <p><strong>On your phone:</strong></p>
-    <p>WhatsApp → Settings → Linked Devices → Link a Device → <em>Link with phone number instead</em></p>
-    <p style="font-size:12px;opacity:0.9;margin-top:8px;">👆 Tap code to copy</p>
+    <div id="pairing-countdown">⏱️ Waiting...</div>
+    <p><strong>On your phone:</strong> WhatsApp → Settings → Linked Devices → Link a Device → <em>Link with phone number instead</em></p>
+    <p style="font-size:12px;opacity:0.9;">👆 Tap code to copy</p>
   </div>
 
   <img id="qr-image" style="display:none;" alt="QR Code" />
   <div id="timer"></div>
 
   <div class="instructions" id="instructions">
-    <strong>⚠️ Two ways to link:</strong>
+    <strong>⚠️ Fastest way:</strong>
     <ol>
-      <li><strong>Pairing Code (recommended):</strong> Type the 8-digit code above into WhatsApp (also look at Render logs)</li>
-      <li><strong>QR Code:</strong> Scan the QR above with WhatsApp → Linked Devices</li>
+      <li>Open WhatsApp → Linked Devices → Link a Device</li>
+      <li>Tap <strong>"Link with phone number instead"</strong></li>
+      <li>Come back here — code appears above</li>
+      <li>Type the 8 digits into WhatsApp NOW</li>
     </ol>
   </div>
 
   <div class="dashboard" id="dashboard">
     <div class="mode-selector">
-      <h4>🎭 Bot Mode</h4>
+      <h4 style="margin:0 0 8px 0;">🎭 Bot Mode</h4>
       <button class="mode-btn mode-normal" onclick="setMode('normal')">Normal</button>
       <button class="mode-btn mode-hungry" onclick="setMode('hungry')">🍔 Hungry</button>
       <button class="mode-btn mode-happy" onclick="setMode('happy')">😊 Happy</button>
       <button class="mode-btn mode-sleepy" onclick="setMode('sleepy')">😴 Sleepy</button>
       <button class="mode-btn mode-pickupline" onclick="setMode('pickupline')">💘 Pick-up</button>
     </div>
-    <h3>💬 Chats</h3>
+    <h3 style="margin:10px 0;">💬 Chats</h3>
     <div class="chat-list" id="chat-list"></div>
     <div class="send-box">
       <input type="text" id="msg" placeholder="Broadcast..." />
-      <button onclick="broadcast()">Broadcast</button>
+      <button onclick="broadcast()">Send</button>
     </div>
   </div>
 </div>
@@ -132,27 +133,27 @@ let interval;
 let codeExpiry = 0;
 let codeInterval;
 
-socket.on('connect', () => status.textContent = 'Connected. Waiting for pairing code...');
-socket.on('disconnect', () => status.textContent = 'Disconnected from server.');
+socket.on('connect', () => status.textContent = 'Connected. Waiting for code...');
+socket.on('disconnect', () => status.textContent = 'Disconnected.');
 
-// ----- PAIRING CODE -----
-socket.on('pairing_code', (data) => {
-  const code = data.code;
-  console.log('🔑 New pairing code:', code);
-  status.textContent = '🔑 Enter the code below in WhatsApp — DO IT FAST!';
+// ---- PAIRING CODE (FIXED) ----
+socket.on('pairing_code', (code) => {
+  // `code` is a plain string like "ABCD1234"
+  console.log('🔑 Pairing code received:', code);
+  status.textContent = '🔑 Enter the code below in WhatsApp!';
   status.style.color = '#25D366';
   pairingSection.style.display = 'block';
-  pairingCode.textContent = code;
+  pairingCode.textContent = String(code);   // ensure string
   instructions.style.display = 'block';
-  // 60-second countdown
-  codeExpiry = data.expiresAt || (Date.now() + 60000);
+  // countdown: 60 seconds
+  codeExpiry = Date.now() + 60000;
   clearInterval(codeInterval);
   codeInterval = setInterval(updateCodeCountdown, 200);
 });
 
 pairingCode.addEventListener('click', () => {
-  const code = pairingCode.textContent.trim();
-  if (code === '----') return;
+  const code = String(pairingCode.textContent || '').trim();
+  if (code === '----' || !code) return;
   navigator.clipboard.writeText(code).then(() => {
     showToast('✅ Code copied: ' + code);
   }).catch(() => {
@@ -235,7 +236,7 @@ function updateCodeCountdown() {
   pairingCountdown.textContent = `⏱️ Code expires in ${s}s — type it NOW!`;
   if (r === 0) {
     clearInterval(codeInterval);
-    pairingCountdown.textContent = '⚠️ Code expired. Waiting for a new one...';
+    pairingCountdown.textContent = '⚠️ Expired. Waiting for a new code...';
   }
 }
 function showToast(msg) {
@@ -243,7 +244,7 @@ function showToast(msg) {
   t.className = 'toast';
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+  setTimeout(() => t.remove(), 2500);
 }
 </script>
 </body>
