@@ -22,6 +22,7 @@ async function initDb() {
 }
 initDb().catch(err => console.error('❌ DB init error:', err));
 
+// ---------- SESSION STORE ----------
 class CustomSupabaseStore {
   constructor(c) { this.s = c; this.t = 'whatsapp_sessions'; }
   async sessionExists({ session }) {
@@ -42,7 +43,12 @@ class CustomSupabaseStore {
   }
 }
 
-const OWNER_NUMBER = process.env.OWNER_NUMBER;
+// ---------- AI ----------
+const OWNER_NUMBER_RAW = process.env.OWNER_NUMBER || '';
+// Clean the number: remove +, spaces, dashes, brackets, leading zeros
+const OWNER_NUMBER = OWNER_NUMBER_RAW.replace(/[^0-9]/g, '').replace(/^0+/, '');
+console.log('📞 OWNER_NUMBER cleaned:', OWNER_NUMBER);
+
 const openai = new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' });
 let currentMode = 'normal';
 
@@ -54,6 +60,7 @@ const MODE_PROMPTS = {
   pickupline: 'You are a flirty bot.'
 };
 
+// ---------- CLIENT ----------
 const client = new Client({
   authStrategy: new RemoteAuth({
     clientId: 'whatsapp-bot',
@@ -68,30 +75,35 @@ const client = new Client({
 });
 
 let latestQr = null;
-let pairingCodeRequested = false;
 let isAuthenticating = false;
 let isReady = false;
+let pairingCodeInFlight = false;
 
-// ---------- PAIRING CODE (The Fix) ----------
+// ---------- THE FIX: Request a new code on EVERY QR event ----------
 client.on('qr', async (qr) => {
   if (isAuthenticating || isReady) return;
 
+  // Send QR to frontend as backup
   const qrImage = await qrcode.toDataURL(qr);
   latestQr = qrImage;
   io.emit('qr', qrImage);
 
-  // Request pairing code ONLY ONCE
-  if (!pairingCodeRequested && OWNER_NUMBER) {
-    pairingCodeRequested = true;
+  // Request a FRESH pairing code every time (if we're not already requesting one)
+  if (OWNER_NUMBER && !pairingCodeInFlight) {
+    pairingCodeInFlight = true;
     try {
-      // The phone number must be in international format without the '+'
       const code = await client.requestPairingCode(OWNER_NUMBER);
-      console.log('\n🔑 YOUR PAIRING CODE: ' + code);
-      io.emit('pairing_code', code);
+      console.log('\n╔════════════════════════════════════════╗');
+      console.log('║  🔑 NEW PAIRING CODE                   ║');
+      console.log(`║       ${code}                    ║`);
+      console.log('║  Type in WhatsApp → Linked Devices →   ║');
+      console.log('║  "Link with phone number instead"      ║');
+      console.log('╚════════════════════════════════════════╝\n');
+      io.emit('pairing_code', { code, expiresAt: Date.now() + 60000 });
     } catch (err) {
       console.error('❌ Pairing code failed:', err.message);
-      // Reset the flag so we can try again on the next QR
-      pairingCodeRequested = false;
+    } finally {
+      pairingCodeInFlight = false;
     }
   }
 });
@@ -106,7 +118,6 @@ client.on('authenticated', () => {
 client.on('auth_failure', (msg) => {
   console.error('❌ Auth failed:', msg);
   isAuthenticating = false;
-  pairingCodeRequested = false;
   io.emit('auth_failure', msg);
 });
 
@@ -132,7 +143,6 @@ client.on('disconnected', (reason) => {
   console.warn('⚠️ Disconnected:', reason);
   isReady = false;
   isAuthenticating = false;
-  pairingCodeRequested = false;
   io.emit('disconnected', reason);
 });
 
