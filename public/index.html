@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WhatsApp Bot</title>
 <style>
-  body { font-family: Arial, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+  body { font-family: Arial; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
   .container { background: #fff; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); text-align: center; max-width: 550px; width: 100%; }
-  h1 { color: #333; margin-bottom: 20px; }
+  h1 { color: #333; }
   #status { margin: 20px 0; font-size: 18px; font-weight: bold; color: #555; }
   #qr-image { max-width: 320px; width: 90%; margin: 20px auto; display: block; border: 4px solid #25D366; border-radius: 8px; }
+  #qr-meta { font-size: 13px; color: #888; }
   #timer { font-size: 20px; color: #f44336; font-weight: bold; margin: 10px 0; }
   .instructions { background: #fff3cd; padding: 15px; border-radius: 8px; text-align: left; font-size: 14px; border-left: 4px solid #ff9800; }
   .instructions ol { margin: 10px 0 0 20px; }
   .dashboard { display: none; text-align: left; }
   .mode-selector { padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px; }
-  .mode-selector h4 { margin: 0 0 10px 0; }
   .mode-btn { display: inline-block; padding: 8px 15px; margin: 5px; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; }
   .mode-btn.active { box-shadow: 0 4px 10px rgba(0,0,0,0.3); transform: scale(1.05); }
   .mode-normal { background: #ccc; color: #333; }
@@ -34,162 +34,152 @@
 </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🤖 WhatsApp Bot</h1>
-    <div id="status">Connecting...</div>
+<div class="container">
+  <h1>🤖 WhatsApp Bot</h1>
+  <div id="status">Connecting...</div>
 
-    <div id="auth-loading" style="display:none;">
-      <div class="spinner"></div>
-      <p style="color:#25D366;font-weight:bold;">🔐 Scan successful! Loading your chats...</p>
-      <p style="color:#888;font-size:14px;">This takes 1–2 minutes. Please wait.</p>
-    </div>
-
-    <img id="qr-image" style="display:none;" alt="QR Code" />
-    <div id="timer"></div>
-
-    <div class="instructions" id="instructions">
-      <strong>⚠️ Before scanning:</strong>
-      <ol>
-        <li>Open WhatsApp → Settings → Linked Devices → Link a Device</li>
-        <li>Stay on the camera screen</li>
-        <li>Scan the QR above within 5 seconds of it appearing</li>
-      </ol>
-    </div>
-
-    <div class="dashboard" id="dashboard">
-      <div class="mode-selector">
-        <h4>🎭 Bot Personality Mode</h4>
-        <button class="mode-btn mode-normal" onclick="setMode('normal')">Normal</button>
-        <button class="mode-btn mode-hungry" onclick="setMode('hungry')">🍔 Hungry</button>
-        <button class="mode-btn mode-happy" onclick="setMode('happy')">😊 Happy</button>
-        <button class="mode-btn mode-sleepy" onclick="setMode('sleepy')">😴 Sleepy</button>
-        <button class="mode-btn mode-pickupline" onclick="setMode('pickupline')">💘 Pick-up</button>
-      </div>
-
-      <h3>💬 Chats</h3>
-      <div class="chat-list" id="chat-list"></div>
-
-      <div class="send-box">
-        <input type="text" id="msg" placeholder="Broadcast to all..." />
-        <button onclick="broadcast()">Broadcast</button>
-      </div>
-    </div>
+  <div id="auth-loading" style="display:none;">
+    <div class="spinner"></div>
+    <p style="color:#25D366;font-weight:bold;">🔐 Scan successful! Loading your chats...</p>
+    <p style="color:#888;font-size:14px;">This takes 1–2 minutes. Please wait.</p>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const status = document.getElementById('status');
-    const qrImage = document.getElementById('qr-image');
-    const timer = document.getElementById('timer');
-    const instructions = document.getElementById('instructions');
-    const dashboard = document.getElementById('dashboard');
-    const chatList = document.getElementById('chat-list');
-    const msgInput = document.getElementById('msg');
-    const authLoading = document.getElementById('auth-loading');
+  <img id="qr-image" style="display:none;" alt="QR Code" />
+  <div id="qr-meta"></div>
+  <div id="timer"></div>
 
-    const socket = io();
-    let currentMode = 'normal';
-    let qrExpiry = 0;
-    let interval;
+  <div class="instructions" id="instructions">
+    <strong>⚠️ Before scanning:</strong>
+    <ol>
+      <li>Open WhatsApp → Settings → Linked Devices → Link a Device</li>
+      <li>Stay on the camera screen</li>
+      <li>Scan the QR above within 5 seconds of it appearing</li>
+    </ol>
+  </div>
 
-    socket.on('connect', () => {
-      status.textContent = 'Connected. Waiting for QR...';
-    });
+  <div class="dashboard" id="dashboard">
+    <div class="mode-selector">
+      <h4>🎭 Bot Mode</h4>
+      <button class="mode-btn mode-normal" onclick="setMode('normal')">Normal</button>
+      <button class="mode-btn mode-hungry" onclick="setMode('hungry')">🍔 Hungry</button>
+      <button class="mode-btn mode-happy" onclick="setMode('happy')">😊 Happy</button>
+      <button class="mode-btn mode-sleepy" onclick="setMode('sleepy')">😴 Sleepy</button>
+      <button class="mode-btn mode-pickupline" onclick="setMode('pickupline')">💘 Pick-up</button>
+    </div>
+    <h3>💬 Chats</h3>
+    <div class="chat-list" id="chat-list"></div>
+    <div class="send-box">
+      <input type="text" id="msg" placeholder="Broadcast..." />
+      <button onclick="broadcast()">Broadcast</button>
+    </div>
+  </div>
+</div>
 
-    socket.on('disconnect', () => {
-      status.textContent = 'Disconnected from server.';
-    });
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const status = document.getElementById('status');
+const qrImage = document.getElementById('qr-image');
+const qrMeta = document.getElementById('qr-meta');
+const timer = document.getElementById('timer');
+const instructions = document.getElementById('instructions');
+const dashboard = document.getElementById('dashboard');
+const chatList = document.getElementById('chat-list');
+const msgInput = document.getElementById('msg');
+const authLoading = document.getElementById('auth-loading');
 
-    socket.on('qr', (data) => {
-      authLoading.style.display = 'none';
-      status.textContent = '📱 Scan the QR NOW!';
-      status.style.color = 'orange';
-      dashboard.style.display = 'none';
-      instructions.style.display = 'block';
-      qrImage.src = data;
-      qrImage.style.display = 'block';
-      qrExpiry = Date.now() + 20000;
-      clearInterval(interval);
-      interval = setInterval(updateTimer, 100);
-    });
+const socket = io();
+let currentMode = 'normal';
+let qrExpiry = 0;
+let interval;
+let currentQrId = null;
 
-    socket.on('authenticated', () => {
-      status.textContent = '🔐 Scan successful! Loading...';
-      status.style.color = '#25D366';
-      qrImage.style.display = 'none';
-      timer.textContent = '';
-      instructions.style.display = 'none';
-      clearInterval(interval);
-      authLoading.style.display = 'block';
-    });
+socket.on('connect', () => status.textContent = 'Connected. Waiting for QR...');
+socket.on('disconnect', () => status.textContent = 'Disconnected.');
 
-    socket.on('ready', () => {
-      status.textContent = '✅ Bot Connected!';
-      status.style.color = 'green';
-      qrImage.style.display = 'none';
-      timer.textContent = '';
-      instructions.style.display = 'none';
-      authLoading.style.display = 'none';
-      dashboard.style.display = 'block';
-      clearInterval(interval);
-    });
+socket.on('qr', (data) => {
+  authLoading.style.display = 'none';
+  status.textContent = '📱 Scan the QR NOW!';
+  status.style.color = 'orange';
+  dashboard.style.display = 'none';
+  instructions.style.display = 'block';
+  qrImage.src = data.image;
+  qrImage.style.display = 'block';
+  currentQrId = data.id;
+  qrMeta.textContent = `QR #${data.id} — in queue: ${data.queueSize}/20`;
+  qrExpiry = Date.now() + 20000;
+  clearInterval(interval);
+  interval = setInterval(updateTimer, 100);
+});
 
-    socket.on('dashboard_data', (data) => {
-      currentMode = data.currentMode || 'normal';
-      highlightMode();
-      chatList.innerHTML = '';
-      data.chats.forEach(chat => {
-        const d = document.createElement('div');
-        d.className = 'chat-item';
-        d.textContent = (chat.isGroup ? '👥 ' : '👤 ') + chat.name;
-        d.onclick = () => {
-          const m = prompt('Message to ' + chat.name + ':');
-          if (m) socket.emit('send_to_chats', { chatIds: [chat.id], message: m });
-        };
-        chatList.appendChild(d);
-      });
-    });
+socket.on('authenticated', (data) => {
+  status.textContent = `🔐 Scan successful (QR #${data.qrId || currentQrId})! Loading...`;
+  status.style.color = '#25D366';
+  qrImage.style.display = 'none';
+  timer.textContent = '';
+  qrMeta.textContent = '';
+  instructions.style.display = 'none';
+  clearInterval(interval);
+  authLoading.style.display = 'block';
+});
 
-    socket.on('mode_updated', (m) => { currentMode = m; highlightMode(); });
-    socket.on('send_result', (r) => alert(r.success ? '✅ Sent!' : '❌ ' + r.error));
-    socket.on('auth_failure', (m) => {
-      status.textContent = '❌ Auth failed: ' + m;
-      authLoading.style.display = 'none';
-    });
-    socket.on('disconnected', (r) => {
-      status.textContent = '⚠️ Disconnected: ' + r;
-      dashboard.style.display = 'none';
-    });
+socket.on('ready', (data) => {
+  status.textContent = '✅ Bot Connected!';
+  status.style.color = 'green';
+  qrImage.style.display = 'none';
+  timer.textContent = '';
+  qrMeta.textContent = '';
+  instructions.style.display = 'none';
+  authLoading.style.display = 'none';
+  dashboard.style.display = 'block';
+  clearInterval(interval);
+});
 
-    function setMode(m) {
-      socket.emit('set_mode', m);
-      currentMode = m;
-      highlightMode();
-    }
+socket.on('dashboard_data', (data) => {
+  currentMode = data.currentMode || 'normal';
+  highlightMode();
+  chatList.innerHTML = '';
+  data.chats.forEach(chat => {
+    const d = document.createElement('div');
+    d.className = 'chat-item';
+    d.textContent = (chat.isGroup ? '👥 ' : '👤 ') + chat.name;
+    d.onclick = () => {
+      const m = prompt('Message to ' + chat.name + ':');
+      if (m) socket.emit('send_to_chats', { chatIds: [chat.id], message: m });
+    };
+    chatList.appendChild(d);
+  });
+});
 
-    function highlightMode() {
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-      const btn = document.querySelector('.mode-' + currentMode);
-      if (btn) btn.classList.add('active');
-    }
+socket.on('mode_updated', (m) => { currentMode = m; highlightMode(); });
+socket.on('send_result', (r) => alert(r.success ? '✅ Sent!' : '❌ ' + r.error));
+socket.on('auth_failure', (m) => {
+  status.textContent = '❌ Auth failed: ' + m;
+  authLoading.style.display = 'none';
+});
+socket.on('disconnected', (r) => {
+  status.textContent = '⚠️ Disconnected: ' + r;
+  dashboard.style.display = 'none';
+});
 
-    function broadcast() {
-      const m = msgInput.value.trim();
-      if (m) {
-        socket.emit('send_to_chats', { chatIds: [], message: m });
-        msgInput.value = '';
-      }
-    }
-
-    function updateTimer() {
-      const r = Math.max(0, qrExpiry - Date.now());
-      timer.textContent = `⏱️ ${(r / 1000).toFixed(1)}s — scan now!`;
-      if (r === 0) {
-        clearInterval(interval);
-        timer.textContent = 'QR expired. New one coming...';
-        qrImage.style.display = 'none';
-      }
-    }
-  </script>
+function setMode(m) { socket.emit('set_mode', m); currentMode = m; highlightMode(); }
+function highlightMode() {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector('.mode-' + currentMode);
+  if (btn) btn.classList.add('active');
+}
+function broadcast() {
+  const m = msgInput.value.trim();
+  if (m) { socket.emit('send_to_chats', { chatIds: [], message: m }); msgInput.value = ''; }
+}
+function updateTimer() {
+  const r = Math.max(0, qrExpiry - Date.now());
+  timer.textContent = `⏱️ ${(r / 1000).toFixed(1)}s — scan now!`;
+  if (r === 0) {
+    clearInterval(interval);
+    timer.textContent = 'QR expired. Waiting for new one...';
+    qrImage.style.display = 'none';
+  }
+}
+</script>
 </body>
 </html>
