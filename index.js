@@ -22,7 +22,6 @@ async function initDb() {
 }
 initDb().catch(err => console.error('❌ DB init error:', err));
 
-// ---------- SESSION STORE ----------
 class CustomSupabaseStore {
   constructor(c) { this.s = c; this.t = 'whatsapp_sessions'; }
   async sessionExists({ session }) {
@@ -43,11 +42,8 @@ class CustomSupabaseStore {
   }
 }
 
-// ---------- AI ----------
-const OWNER_NUMBER_RAW = process.env.OWNER_NUMBER || '';
-// Clean the number: remove +, spaces, dashes, brackets, leading zeros
-const OWNER_NUMBER = OWNER_NUMBER_RAW.replace(/[^0-9]/g, '').replace(/^0+/, '');
-console.log('📞 OWNER_NUMBER cleaned:', OWNER_NUMBER);
+const OWNER_NUMBER = (process.env.OWNER_NUMBER || '').replace(/[^0-9]/g, '').replace(/^0+/, '');
+console.log('📞 OWNER_NUMBER:', OWNER_NUMBER);
 
 const openai = new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: 'https://api.groq.com/openai/v1' });
 let currentMode = 'normal';
@@ -60,7 +56,6 @@ const MODE_PROMPTS = {
   pickupline: 'You are a flirty bot.'
 };
 
-// ---------- CLIENT ----------
 const client = new Client({
   authStrategy: new RemoteAuth({
     clientId: 'whatsapp-bot',
@@ -79,27 +74,23 @@ let isAuthenticating = false;
 let isReady = false;
 let pairingCodeInFlight = false;
 
-// ---------- THE FIX: Request a new code on EVERY QR event ----------
 client.on('qr', async (qr) => {
   if (isAuthenticating || isReady) return;
 
-  // Send QR to frontend as backup
   const qrImage = await qrcode.toDataURL(qr);
   latestQr = qrImage;
   io.emit('qr', qrImage);
 
-  // Request a FRESH pairing code every time (if we're not already requesting one)
+  // Request a fresh pairing code on every QR (unless one is already in flight)
   if (OWNER_NUMBER && !pairingCodeInFlight) {
     pairingCodeInFlight = true;
     try {
       const code = await client.requestPairingCode(OWNER_NUMBER);
       console.log('\n╔════════════════════════════════════════╗');
-      console.log('║  🔑 NEW PAIRING CODE                   ║');
-      console.log(`║       ${code}                    ║`);
-      console.log('║  Type in WhatsApp → Linked Devices →   ║');
-      console.log('║  "Link with phone number instead"      ║');
+      console.log(`║  🔑 NEW PAIRING CODE:  ${code}  ║`);
       console.log('╚════════════════════════════════════════╝\n');
-      io.emit('pairing_code', { code, expiresAt: Date.now() + 60000 });
+      // Send as plain string so the frontend displays it directly
+      io.emit('pairing_code', code);
     } catch (err) {
       console.error('❌ Pairing code failed:', err.message);
     } finally {
