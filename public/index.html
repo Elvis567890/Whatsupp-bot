@@ -136,16 +136,14 @@ let codeInterval;
 socket.on('connect', () => status.textContent = 'Connected. Waiting for code...');
 socket.on('disconnect', () => status.textContent = 'Disconnected.');
 
-// ---- PAIRING CODE (FIXED) ----
+// ---- PAIRING CODE (listens for the 'code' event) ----
 socket.on('pairing_code', (code) => {
-  // `code` is a plain string like "ABCD1234"
   console.log('🔑 Pairing code received:', code);
   status.textContent = '🔑 Enter the code below in WhatsApp!';
   status.style.color = '#25D366';
   pairingSection.style.display = 'block';
-  pairingCode.textContent = String(code);   // ensure string
+  pairingCode.textContent = String(code);   // plain string
   instructions.style.display = 'block';
-  // countdown: 60 seconds
   codeExpiry = Date.now() + 60000;
   clearInterval(codeInterval);
   codeInterval = setInterval(updateCodeCountdown, 200);
