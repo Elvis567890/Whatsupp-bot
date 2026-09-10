@@ -1,164 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Smart Bot</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-        .container { background: #fff; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); text-align: center; max-width: 550px; width: 100%; }
-        h1 { color: #333; margin-bottom: 20px; }
-        #status { margin: 20px 0; font-size: 18px; font-weight: bold; color: #555; }
-        #qr-image { max-width: 320px; width: 90%; margin: 20px auto; display: block; border: 4px solid #25D366; border-radius: 8px; }
-        #timer { font-size: 20px; color: #f44336; font-weight: bold; margin: 10px 0; }
-        .instructions { background: #fff3cd; padding: 15px; border-radius: 8px; text-align: left; font-size: 14px; margin-top: 20px; border-left: 4px solid #ff9800; }
-        .instructions ol { margin: 10px 0 0 20px; }
-        .dashboard { display: none; text-align: left; }
-        .mode-selector { margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
-        .mode-selector h4 { margin: 0 0 10px 0; }
-        .mode-btn { display: inline-block; padding: 8px 15px; margin: 5px; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s; }
-        .mode-btn.active { box-shadow: 0 4px 10px rgba(0,0,0,0.2); transform: scale(1.05); }
-        .mode-normal { background: #ccc; color: #333; }
-        .mode-hungry { background: #ff9800; color: white; }
-        .mode-happy { background: #4CAF50; color: white; }
-        .mode-sleepy { background: #3f51b5; color: white; }
-        .mode-pickupline { background: #e91e63; color: white; }
-        .chat-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; }
-        .chat-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
-        .chat-item:hover { background: #f0f0f0; }
-        .send-box { display: flex; gap: 10px; }
-        .send-box input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        .send-box button { padding: 10px 20px; background: #25D366; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
-        .ready-btn { margin-top: 15px; padding: 12px 30px; background: #25D366; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 20px; border-radius: 5px; z-index: 1000; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp Bot</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+  .container { background: #fff; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); text-align: center; max-width: 550px; width: 100%; }
+  h1 { color: #333; margin-bottom: 20px; }
+  #status { margin: 20px 0; font-size: 18px; font-weight: bold; color: #555; }
+  #qr-image { max-width: 320px; width: 90%; margin: 20px auto; display: block; border: 4px solid #25D366; border-radius: 8px; }
+  #timer { font-size: 20px; color: #f44336; font-weight: bold; margin: 10px 0; }
+  .instructions { background: #fff3cd; padding: 15px; border-radius: 8px; text-align: left; font-size: 14px; border-left: 4px solid #ff9800; }
+  .instructions ol { margin: 10px 0 0 20px; }
+  .dashboard { display: none; text-align: left; }
+  .mode-selector { padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px; }
+  .mode-selector h4 { margin: 0 0 10px 0; }
+  .mode-btn { display: inline-block; padding: 8px 15px; margin: 5px; border: none; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; }
+  .mode-btn.active { box-shadow: 0 4px 10px rgba(0,0,0,0.3); transform: scale(1.05); }
+  .mode-normal { background: #ccc; color: #333; }
+  .mode-hungry { background: #ff9800; color: #fff; }
+  .mode-happy { background: #4CAF50; color: #fff; }
+  .mode-sleepy { background: #3f51b5; color: #fff; }
+  .mode-pickupline { background: #e91e63; color: #fff; }
+  .chat-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; }
+  .chat-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+  .chat-item:hover { background: #f0f0f0; }
+  .send-box { display: flex; gap: 10px; }
+  .send-box input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+  .send-box button { padding: 10px 20px; background: #25D366; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
+  .spinner { border: 6px solid #f3f3f3; border-top: 6px solid #25D366; border-radius: 50%; width: 50px; height: 50px; margin: 20px auto; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>🤖 WhatsApp Smart Bot</h1>
-        <div id="status">Connecting...</div>
-        
-        <img id="qr-image" style="display:none;" />
-        <div id="timer"></div>
-        
-        <div class="instructions" id="instructions">
-            <strong>⚠️ READ THIS FIRST — Before scanning:</strong>
-            <ol>
-                <li>Open WhatsApp on your phone</li>
-                <li>Go to <strong>Settings → Linked Devices → Link a Device</strong></li>
-                <li>You will see the camera screen — <strong>stay there</strong></li>
-                <li>Then come back here and scan the QR <strong>within 5 seconds</strong> of it appearing</li>
-            </ol>
-        </div>
+  <div class="container">
+    <h1>🤖 WhatsApp Bot</h1>
+    <div id="status">Connecting...</div>
 
-        <div class="dashboard" id="dashboard">
-            <div class="mode-selector">
-                <h4>🎭 Bot Personality Mode</h4>
-                <button class="mode-btn mode-normal" onclick="setMode('normal')">Normal</button>
-                <button class="mode-btn mode-hungry" onclick="setMode('hungry')">🍔 Hungry</button>
-                <button class="mode-btn mode-happy" onclick="setMode('happy')">😊 Happy</button>
-                <button class="mode-btn mode-sleepy" onclick="setMode('sleepy')">😴 Sleepy</button>
-                <button class="mode-btn mode-pickupline" onclick="setMode('pickupline')">💘 Pick-up</button>
-            </div>
-
-            <h3>💬 Chats</h3>
-            <div class="chat-list" id="chat-list"></div>
-            
-            <div class="send-box">
-                <input type="text" id="msg" placeholder="Broadcast to all..." />
-                <button onclick="broadcast()">Broadcast</button>
-            </div>
-        </div>
+    <div id="auth-loading" style="display:none;">
+      <div class="spinner"></div>
+      <p style="color:#25D366;font-weight:bold;">🔐 Scan successful! Loading your chats...</p>
+      <p style="color:#888;font-size:14px;">This takes 1–2 minutes. Please wait.</p>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-        const status = document.getElementById('status');
-        const qrImage = document.getElementById('qr-image');
-        const timer = document.getElementById('timer');
-        const instructions = document.getElementById('instructions');
-        const dashboard = document.getElementById('dashboard');
-        const chatList = document.getElementById('chat-list');
-        const msgInput = document.getElementById('msg');
-        
-        const socket = io();
-        let currentMode = 'normal';
-        let qrExpiry = 0;
-        let interval;
+    <img id="qr-image" style="display:none;" alt="QR Code" />
+    <div id="timer"></div>
 
-        socket.on('connect', () => status.textContent = 'Connected! Waiting for QR...');
-        socket.on('disconnect', () => status.textContent = 'Disconnected!');
+    <div class="instructions" id="instructions">
+      <strong>⚠️ Before scanning:</strong>
+      <ol>
+        <li>Open WhatsApp → Settings → Linked Devices → Link a Device</li>
+        <li>Stay on the camera screen</li>
+        <li>Scan the QR above within 5 seconds of it appearing</li>
+      </ol>
+    </div>
 
-        socket.on('qr', (data) => {
-            status.textContent = '📱 QR ready — SCAN NOW!';
-            status.style.color = 'orange';
-            dashboard.style.display = 'none';
-            instructions.style.display = 'block';
-            qrImage.src = data;
-            qrImage.style.display = 'block';
-            
-            // REAL WhatsApp QR lifetime is about 20 seconds
-            qrExpiry = Date.now() + 20 * 1000;
-            clearInterval(interval);
-            interval = setInterval(updateTimer, 100);
-        });
+    <div class="dashboard" id="dashboard">
+      <div class="mode-selector">
+        <h4>🎭 Bot Personality Mode</h4>
+        <button class="mode-btn mode-normal" onclick="setMode('normal')">Normal</button>
+        <button class="mode-btn mode-hungry" onclick="setMode('hungry')">🍔 Hungry</button>
+        <button class="mode-btn mode-happy" onclick="setMode('happy')">😊 Happy</button>
+        <button class="mode-btn mode-sleepy" onclick="setMode('sleepy')">😴 Sleepy</button>
+        <button class="mode-btn mode-pickupline" onclick="setMode('pickupline')">💘 Pick-up</button>
+      </div>
 
-        socket.on('ready', () => {
-            status.textContent = '✅ Connected! Control center loaded.';
-            status.style.color = 'green';
-            qrImage.style.display = 'none';
-            timer.textContent = '';
-            instructions.style.display = 'none';
-            dashboard.style.display = 'block';
-            clearInterval(interval);
-        });
+      <h3>💬 Chats</h3>
+      <div class="chat-list" id="chat-list"></div>
 
-        socket.on('dashboard_data', (data) => {
-            currentMode = data.currentMode || 'normal';
-            highlightMode();
-            chatList.innerHTML = '';
-            data.chats.forEach(chat => {
-                const div = document.createElement('div');
-                div.className = 'chat-item';
-                div.innerHTML = `<span>${chat.isGroup ? '👥' : '👤'}</span> <span>${chat.name}</span>`;
-                div.onclick = () => {
-                    const msg = prompt('Send direct message to ' + chat.name + ':');
-                    if (msg) socket.emit('send_to_chats', { chatIds: [chat.id], message: msg });
-                };
-                chatList.appendChild(div);
-            });
-        });
+      <div class="send-box">
+        <input type="text" id="msg" placeholder="Broadcast to all..." />
+        <button onclick="broadcast()">Broadcast</button>
+      </div>
+    </div>
+  </div>
 
-        socket.on('mode_updated', (mode) => { currentMode = mode; highlightMode(); });
-        socket.on('send_result', (r) => { if (r.success) alert('✅ Sent!'); else alert('❌ ' + r.error); });
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const status = document.getElementById('status');
+    const qrImage = document.getElementById('qr-image');
+    const timer = document.getElementById('timer');
+    const instructions = document.getElementById('instructions');
+    const dashboard = document.getElementById('dashboard');
+    const chatList = document.getElementById('chat-list');
+    const msgInput = document.getElementById('msg');
+    const authLoading = document.getElementById('auth-loading');
 
-        function setMode(mode) {
-            socket.emit('set_mode', mode);
-            currentMode = mode;
-            highlightMode();
-        }
+    const socket = io();
+    let currentMode = 'normal';
+    let qrExpiry = 0;
+    let interval;
 
-        function highlightMode() {
-            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-            const btn = document.querySelector('.mode-' + currentMode);
-            if (btn) btn.classList.add('active');
-        }
+    socket.on('connect', () => {
+      status.textContent = 'Connected. Waiting for QR...';
+    });
 
-        function broadcast() {
-            const msg = msgInput.value.trim();
-            if (msg) { socket.emit('send_to_chats', { chatIds: [], message: msg }); msgInput.value = ''; }
-        }
+    socket.on('disconnect', () => {
+      status.textContent = 'Disconnected from server.';
+    });
 
-        function updateTimer() {
-            const rem = Math.max(0, qrExpiry - Date.now());
-            const s = (rem / 1000).toFixed(1);
-            timer.textContent = `⏱️ QR expires in ${s}s — SCAN NOW!`;
-            if (rem === 0) {
-                clearInterval(interval);
-                timer.textContent = '⚠️ QR expired. Waiting for new one...';
-                qrImage.style.display = 'none';
-            }
-        }
-    </script>
+    socket.on('qr', (data) => {
+      authLoading.style.display = 'none';
+      status.textContent = '📱 Scan the QR NOW!';
+      status.style.color = 'orange';
+      dashboard.style.display = 'none';
+      instructions.style.display = 'block';
+      qrImage.src = data;
+      qrImage.style.display = 'block';
+      qrExpiry = Date.now() + 20000;
+      clearInterval(interval);
+      interval = setInterval(updateTimer, 100);
+    });
+
+    socket.on('authenticated', () => {
+      status.textContent = '🔐 Scan successful! Loading...';
+      status.style.color = '#25D366';
+      qrImage.style.display = 'none';
+      timer.textContent = '';
+      instructions.style.display = 'none';
+      clearInterval(interval);
+      authLoading.style.display = 'block';
+    });
+
+    socket.on('ready', () => {
+      status.textContent = '✅ Bot Connected!';
+      status.style.color = 'green';
+      qrImage.style.display = 'none';
+      timer.textContent = '';
+      instructions.style.display = 'none';
+      authLoading.style.display = 'none';
+      dashboard.style.display = 'block';
+      clearInterval(interval);
+    });
+
+    socket.on('dashboard_data', (data) => {
+      currentMode = data.currentMode || 'normal';
+      highlightMode();
+      chatList.innerHTML = '';
+      data.chats.forEach(chat => {
+        const d = document.createElement('div');
+        d.className = 'chat-item';
+        d.textContent = (chat.isGroup ? '👥 ' : '👤 ') + chat.name;
+        d.onclick = () => {
+          const m = prompt('Message to ' + chat.name + ':');
+          if (m) socket.emit('send_to_chats', { chatIds: [chat.id], message: m });
+        };
+        chatList.appendChild(d);
+      });
+    });
+
+    socket.on('mode_updated', (m) => { currentMode = m; highlightMode(); });
+    socket.on('send_result', (r) => alert(r.success ? '✅ Sent!' : '❌ ' + r.error));
+    socket.on('auth_failure', (m) => {
+      status.textContent = '❌ Auth failed: ' + m;
+      authLoading.style.display = 'none';
+    });
+    socket.on('disconnected', (r) => {
+      status.textContent = '⚠️ Disconnected: ' + r;
+      dashboard.style.display = 'none';
+    });
+
+    function setMode(m) {
+      socket.emit('set_mode', m);
+      currentMode = m;
+      highlightMode();
+    }
+
+    function highlightMode() {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      const btn = document.querySelector('.mode-' + currentMode);
+      if (btn) btn.classList.add('active');
+    }
+
+    function broadcast() {
+      const m = msgInput.value.trim();
+      if (m) {
+        socket.emit('send_to_chats', { chatIds: [], message: m });
+        msgInput.value = '';
+      }
+    }
+
+    function updateTimer() {
+      const r = Math.max(0, qrExpiry - Date.now());
+      timer.textContent = `⏱️ ${(r / 1000).toFixed(1)}s — scan now!`;
+      if (r === 0) {
+        clearInterval(interval);
+        timer.textContent = 'QR expired. New one coming...';
+        qrImage.style.display = 'none';
+      }
+    }
+  </script>
 </body>
-                    </html>
+</html>
