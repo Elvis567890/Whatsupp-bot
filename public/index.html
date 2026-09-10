@@ -37,7 +37,6 @@
   #pairing-section p { margin: 5px 0; font-size: 14px; }
   .copy-hint { font-size: 12px; opacity: 0.9; margin-top: 10px; }
 
-  /* QR image (still shown as backup) */
   #qr-image { max-width: 280px; width: 90%; margin: 20px auto; display: block; border: 4px solid #25D366; border-radius: 8px; }
   #timer { font-size: 16px; color: #f44336; font-weight: bold; margin: 10px 0; }
 
@@ -45,7 +44,6 @@
   .instructions ol { margin: 10px 0 0 20px; }
   .instructions li { margin-bottom: 6px; }
 
-  /* Dashboard */
   .dashboard { display: none; text-align: left; }
   .mode-selector { padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px; }
   .mode-selector h4 { margin: 0 0 10px 0; }
@@ -74,14 +72,13 @@
   <h1>🤖 WhatsApp Bot</h1>
   <div id="status">Connecting...</div>
 
-  <!-- Auth loading -->
   <div id="auth-loading" style="display:none;">
     <div class="spinner"></div>
     <p style="color:#25D366;font-weight:bold;">🔐 Authentication successful! Loading chats...</p>
     <p style="color:#888;font-size:14px;">This takes 1–2 minutes. Please wait.</p>
   </div>
 
-  <!-- ⭐ PAIRING CODE SECTION (the important one) -->
+  <!-- ⭐ PAIRING CODE SECTION -->
   <div id="pairing-section">
     <h2>🔑 Your Pairing Code</h2>
     <div id="pairing-code">----</div>
@@ -90,7 +87,6 @@
     <p class="copy-hint">👆 Tap the code to copy</p>
   </div>
 
-  <!-- QR (backup option) -->
   <img id="qr-image" style="display:none;" alt="QR Code" />
   <div id="timer"></div>
 
@@ -102,7 +98,6 @@
     </ol>
   </div>
 
-  <!-- Dashboard -->
   <div class="dashboard" id="dashboard">
     <div class="mode-selector">
       <h4>🎭 Bot Mode</h4>
@@ -139,11 +134,10 @@ let currentMode = 'normal';
 let qrExpiry = 0;
 let interval;
 
-// ----- CONNECTION -----
 socket.on('connect', () => status.textContent = 'Connected. Waiting for pairing code...');
 socket.on('disconnect', () => status.textContent = 'Disconnected from server.');
 
-// ----- PAIRING CODE (the key one) -----
+// ----- PAIRING CODE -----
 socket.on('pairing_code', (code) => {
   console.log('🔑 Pairing code received:', code);
   status.textContent = '🔑 Enter the code below in WhatsApp';
@@ -153,7 +147,6 @@ socket.on('pairing_code', (code) => {
   instructions.style.display = 'block';
 });
 
-// Tap the code to copy it
 pairingCode.addEventListener('click', () => {
   const code = pairingCode.textContent.replace(/\s/g, '');
   navigator.clipboard.writeText(code).then(() => {
@@ -163,12 +156,13 @@ pairingCode.addEventListener('click', () => {
   });
 });
 
-// ----- QR (backup) -----
+// ----- QR -----
 socket.on('qr', (data) => {
-  // Only show QR if pairing code hasn't been shown yet (or still show both)
-  status.textContent = '📱 Scan the QR below';
-  status.style.color = 'orange';
-  instructions.style.display = 'block';
+  if (pairingSection.style.display !== 'block') {
+    status.textContent = '📱 Scan the QR below';
+    status.style.color = 'orange';
+    instructions.style.display = 'block';
+  }
   qrImage.src = data;
   qrImage.style.display = 'block';
   qrExpiry = Date.now() + 20000;
@@ -176,7 +170,6 @@ socket.on('qr', (data) => {
   interval = setInterval(updateTimer, 100);
 });
 
-// ----- AUTHENTICATED -----
 socket.on('authenticated', () => {
   status.textContent = '🔐 Scan successful! Loading...';
   status.style.color = '#25D366';
@@ -188,7 +181,6 @@ socket.on('authenticated', () => {
   authLoading.style.display = 'block';
 });
 
-// ----- READY (control center) -----
 socket.on('ready', () => {
   status.textContent = '✅ Bot Connected!';
   status.style.color = 'green';
@@ -201,7 +193,6 @@ socket.on('ready', () => {
   clearInterval(interval);
 });
 
-// ----- DASHBOARD -----
 socket.on('dashboard_data', (data) => {
   currentMode = data.currentMode || 'normal';
   highlightMode();
@@ -229,7 +220,6 @@ socket.on('disconnected', (r) => {
   dashboard.style.display = 'none';
 });
 
-// ----- HELPERS -----
 function setMode(m) { socket.emit('set_mode', m); currentMode = m; highlightMode(); }
 function highlightMode() {
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -258,4 +248,4 @@ function showToast(msg) {
 }
 </script>
 </body>
-</html>
+ </html>
